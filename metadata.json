@@ -1,0 +1,6 @@
+{
+  "name": "LÉO IA — Assistente de Academia Inteligente",
+  "description": "Aplicativo mobile de assistência inteligente para academias, treinos personalizados, acompanhamento de evolução e suporte com LÉO IA.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

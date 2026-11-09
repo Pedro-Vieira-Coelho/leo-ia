@@ -1,0 +1,103 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --bg-canvas: #0B0712;
+    --bg-gradient-mid: #160B25;
+    --bg-gradient-top: #271044;
+    --surface-1: #171026;
+    --surface-2: #1F1433;
+    --surface-elevated: #281B42;
+    --primary-purple: #842BAF;
+    --primary-dark: #681791;
+    --lilac-accent: #B784E6;
+    --neon-green: #2BED77;
+    --electric-blue: #0270FF;
+    --solar-yellow: #FFD729;
+    --text-primary: #FFFFFF;
+    --text-secondary: #A59DB5;
+    --text-muted: #8C849B;
+    --border-hairline: rgba(255, 255, 255, 0.08);
+    --border-accent: rgba(183, 132, 230, 0.25);
+  }
+
+  body {
+    background-color: #0B0712;
+    color: #FFFFFF;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    -webkit-tap-highlight-color: transparent;
+    overscroll-behavior-y: none;
+  }
+
+  h1, h2, h3, h4, h5, h6, .font-heading {
+    font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+  }
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+::-webkit-scrollbar-track {
+  background: #0B0712;
+}
+::-webkit-scrollbar-thumb {
+  background: #271044;
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #842BAF;
+}
+
+/* Glassmorphism & Atmospheric glows */
+.glass-surface {
+  background: rgba(23, 16, 38, 0.78);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.glass-card {
+  background: #171026;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.glass-card-elevated {
+  background: #1F1433;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 8px 32px -4px rgba(11, 7, 18, 0.6);
+}
+
+.glow-purple {
+  box-shadow: 0 0 25px 2px rgba(132, 43, 175, 0.45);
+}
+
+.glow-purple-lg {
+  box-shadow: 0 0 35px 5px rgba(132, 43, 175, 0.35);
+}
+
+.glow-green {
+  box-shadow: 0 0 16px rgba(43, 237, 119, 0.35);
+}
+
+.pulse-subtle {
+  animation: pulse-subtle 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes pulse-subtle {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.92;
+    transform: scale(1.02);
+  }
+}
+
+/* Safe area bottom margin for mobile screens to clear bottom navigation */
+.pb-safe-nav {
+  padding-bottom: calc(5.5rem + env(safe-area-inset-bottom, 12px));
+}
+

@@ -1,0 +1,22 @@
+# Dependências
+node_modules/
+
+# Builds
+dist/
+build/
+coverage/
+
+# Arquivos internos do Google AI Studio
+.aistudio/
+
+# Variáveis de ambiente
+.env*
+!.env.example
+
+# Sistema operacional
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
