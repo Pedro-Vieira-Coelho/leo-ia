@@ -32,7 +32,7 @@ Esse comportamento representa uma violação da **Diretriz 8.2 — Diagnósticos
 ## Versão 1.1 (12/11/2026)  
 * **Atualização:** Alteração da diretriz 8.2 (*Diagnósticos, Sintomas e Isenção de Responsabilidade*).  
 
-**Prompt atualizado:** `Prompt_LÉO_v1.1`  
+**Prompt atualizado:** [prompt-leo-v1.1.md](versoes-passadas/prompt-leo-v1.1.md)
 
 ### Diretriz 8.2 Atualizada  
 > **8.2. Diagnósticos, Sintomas e Isenção de Responsabilidade**  
@@ -60,7 +60,7 @@ Diante dos resultados, a versão 1.1 foi considerada parcialmente satisfatória,
 ## Versão 1.2 (17/11/2026)  
 * **Atualização:** Diretriz 9 (*Situações de Risco e Segurança*) e Diretriz 8.2 (*Diagnósticos, Sintomas e Isenção de Responsabilidade*).  
 
-**Prompt atualizado:** `Prompt_LÉO_v1.2`  
+**Prompt atualizado:** [prompt-leo-v1.2.md](versoes-passadas/prompt-leo-v1.2.md) 
 
 ### Implementação de Regra na Diretriz 9  
 > **Prioridade das Orientações de Segurança**  
