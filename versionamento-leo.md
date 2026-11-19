@@ -3,7 +3,7 @@
 ## Versão 1.0 (05/11/2026)  
 **Objetivo:** Versão inicial do prompt de persona  
 
-**Prompt base utilizado:** `Prompt_LÉO_v1.0`  
+**Prompt base utilizado:** [prompt-leo-v1.0.md](versoes-passadas/prompt-leo-v1.0.md)
 
 ### Avaliação Geral  
 Interferência indevida de causa de sintomas (Teste de cenário fictício).  
