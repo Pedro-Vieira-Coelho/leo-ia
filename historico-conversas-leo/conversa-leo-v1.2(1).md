@@ -513,14 +513,6 @@
 >
 > Para você visualizar como estruturar isso, existem duas divisões principais que costumam se encaixar muito bem em 4 dias. Vou explicar por que uma delas costuma ser especialmente prática para treinos curtos, além de mostrar a alternativa:
 >
-## Turno 7 — Organização de rotina de treinamento com tempo limitado (continuação)
-
-**IA:**
-
-> Com 4 dias disponíveis na semana e 40 minutos por sessão, é totalmente possível organizar um treino muito eficiente para ganhar massa muscular — especialmente porque você já tem 2 anos de prática e conhece bem os movimentos. O segredo para esse formato funcionar é a objetividade: escolher os exercícios certos e administrar bem o tempo entre as séries.
->
-> Para você visualizar como estruturar isso, existem duas divisões principais que costumam se encaixar muito bem em 4 dias. Vou explicar por que uma delas costuma ser especialmente prática para treinos curtos, além de mostrar a alternativa:
->
 > Opção 1: Divisão Superior / Inferior (Upper / Lower)
 > Você divide a semana em 2 dias de membros superiores e 2 dias de membros inferiores (por exemplo: Segunda e Quinta Superior; Terça e Sexta Inferior).
 > - Por que funciona tão bem para hipertrofia em 40 minutos:
