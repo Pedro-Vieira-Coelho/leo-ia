@@ -1,12 +1,16 @@
 import { ChatConversation, ChatMessage, SuggestedPrompt } from '../models/chat.model';
 import { SUGGESTED_PROMPTS } from '../shared/constants';
+import { getSupabaseClient } from './supabase.client';
 
 class ChatService {
-  private readonly STORAGE_KEY = 'leo_ia_chat_conversations_v2';
-  private readonly ACTIVE_ID_KEY = 'leo_ia_active_conversation_id';
+  private readonly STORAGE_PREFIX = 'leo_ia_chat_conversations_v2';
+  private readonly ACTIVE_ID_PREFIX = 'leo_ia_active_conversation_id';
+  private storageKey = `${this.STORAGE_PREFIX}:guest`;
+  private activeIdKey = `${this.ACTIVE_ID_PREFIX}:guest`;
   private conversations: ChatConversation[] = [];
   private activeConversationId: string = 'conv_1';
   private listeners: Array<() => void> = [];
+  private userScope = 'guest';
 
   constructor() {
     this.initConversations();
@@ -14,8 +18,8 @@ class ChatService {
 
   private initConversations() {
     try {
-      const stored = localStorage.getItem(this.STORAGE_KEY);
-      const storedActiveId = localStorage.getItem(this.ACTIVE_ID_KEY);
+      const stored = localStorage.getItem(this.storageKey);
+      const storedActiveId = localStorage.getItem(this.activeIdKey);
 
       if (stored) {
         this.conversations = JSON.parse(stored);
@@ -25,23 +29,35 @@ class ChatService {
           this.activeConversationId = this.conversations[0].id;
         }
       } else {
-        this.conversations = this.getDefaultConversations();
-        this.activeConversationId = 'conv_1';
-        this.save();
+        this.conversations = this.userScope === 'guest' ? this.getDefaultConversations() : [];
+        this.activeConversationId = this.conversations[0]?.id ?? '';
+        if (this.conversations.length > 0) this.save();
       }
     } catch {
-      this.conversations = this.getDefaultConversations();
-      this.activeConversationId = 'conv_1';
+      this.conversations = this.userScope === 'guest' ? this.getDefaultConversations() : [];
+      this.activeConversationId = this.conversations[0]?.id ?? '';
     }
   }
 
   private save() {
     try {
-      localStorage.setItem(this.STORAGE_KEY, JSON.stringify(this.conversations));
-      localStorage.setItem(this.ACTIVE_ID_KEY, this.activeConversationId);
+      localStorage.setItem(this.storageKey, JSON.stringify(this.conversations));
+      localStorage.setItem(this.activeIdKey, this.activeConversationId);
     } catch {
       // ignore
     }
+  }
+
+  public setUserScope(userId: string | null): void {
+    const nextScope = userId ?? 'guest';
+    if (nextScope === this.userScope) return;
+
+    this.userScope = nextScope;
+    this.storageKey = `${this.STORAGE_PREFIX}:${nextScope}`;
+    this.activeIdKey = `${this.ACTIVE_ID_PREFIX}:${nextScope}`;
+    this.activeConversationId = 'conv_1';
+    this.initConversations();
+    this.notify();
   }
 
   private getDefaultConversations(): ChatConversation[] {
@@ -217,7 +233,7 @@ class ChatService {
   }
 
   public createConversation(title?: string): ChatConversation {
-    const newId = `conv_${Date.now()}`;
+    const newId = `conv_${crypto.randomUUID()}`;
     const now = new Date().toISOString();
     const newConv: ChatConversation = {
       id: newId,
@@ -228,9 +244,9 @@ class ChatService {
       contextWorkout: 'Treino A · Peito, Tríceps & Ombro',
       messages: [
         {
-          id: `msg_welcome_${Date.now()}`,
+          id: `msg_welcome_${crypto.randomUUID()}`,
           sender: 'leo',
-          text: 'Olá, Carlos! Como posso te orientar no treino de hoje? Podemos revisar a postura, adaptar exercícios para seus ombros ou ajustar os intervalos de descanso.',
+          text: 'Olá! Como posso ajudar no seu treino hoje? Posso conversar sobre postura, adaptação de exercícios ou organização da rotina.',
           timestamp: this.getCurrentTime(),
           category: 'workout_adjustment'
         }
@@ -294,14 +310,19 @@ class ChatService {
     return SUGGESTED_PROMPTS;
   }
 
-  public sendMessage(userText: string): void {
+  public async sendMessage(userText: string): Promise<void> {
+    const text = userText.trim();
+    if (!text || text.length > 2000) {
+      throw new Error('A mensagem deve ter entre 1 e 2000 caracteres.');
+    }
+
     const currentConv = this.getActiveConversation();
     const nowTime = this.getCurrentTime();
 
     const userMsg: ChatMessage = {
-      id: `usr_${Date.now()}`,
+      id: `usr_${crypto.randomUUID()}`,
       sender: 'user',
-      text: userText,
+      text,
       timestamp: nowTime
     };
 
@@ -310,20 +331,29 @@ class ChatService {
 
     // If it's a new conversation, title it appropriately from the first prompt
     if (currentConv.title === 'Nova conversa' && currentConv.messages.length <= 3) {
-      currentConv.title = this.generateTitleFromPrompt(userText);
+      currentConv.title = this.generateTitleFromPrompt(text);
     }
 
     this.save();
     this.notify();
 
-    // Generate response from LÉO
-    setTimeout(() => {
-      const response = this.generateLeoResponse(userText);
-      currentConv.messages.push(response);
-      currentConv.updatedAt = new Date().toISOString();
-      this.save();
-      this.notify();
-    }, 600);
+    const { data, error } = await getSupabaseClient().functions.invoke<{ text: string }>(
+      'chat-message',
+      { body: { message: text } },
+    );
+    if (error) throw error;
+    if (!data?.text) throw new Error('A IA não retornou uma resposta válida. Tente novamente.');
+
+    currentConv.messages.push({
+      id: `leo_${crypto.randomUUID()}`,
+      sender: 'leo',
+      text: data.text,
+      timestamp: this.getCurrentTime(),
+      category: 'motivation',
+    });
+    currentConv.updatedAt = new Date().toISOString();
+    this.save();
+    this.notify();
   }
 
   private generateTitleFromPrompt(prompt: string): string {
