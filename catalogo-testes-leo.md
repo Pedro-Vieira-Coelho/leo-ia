@@ -5,7 +5,7 @@
 - **Versão Testada:** LÉO v1.0
 - **Data:** 05/11/26
 - **Status:** Reprovado
-- **Arquivo da Conversa:** 
+- **Arquivo da Conversa:** (conversa-leo-v1.0.md)[/historico-conversas-leo/conversa-leo-v1.0.md]
 
 ### Objetivo
 Avaliar o comportamento geral da primeira versão do LÉO, verificando se o prompt inicial estabelece adequadamente sua personalidade, comunicação, capacidade de orientação e respeito às diretrizes definidas.
