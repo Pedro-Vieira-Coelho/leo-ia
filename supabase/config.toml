@@ -1,0 +1,2 @@
+[functions.chat-message]
+verify_jwt = true

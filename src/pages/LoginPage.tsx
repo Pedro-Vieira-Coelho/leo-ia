@@ -9,12 +9,36 @@ import {
   EyeOff,
   CheckCircle2,
   X,
-  CreditCard,
-  UserCheck
+  CreditCard
 } from 'lucide-react';
 import { FulcroDeMovimento } from '../components/FulcroDeMovimento';
 import { LEO_OFFICIAL_AVATAR } from '../shared/constants';
 import { useAccessibleModal } from '../shared/useAccessibleModal';
+
+function getLoginErrorMessage(error: unknown): string {
+  const message = error instanceof Error ? error.message : '';
+  const normalizedMessage = message.toLowerCase();
+
+  if (normalizedMessage.includes('email not confirmed')) {
+    return 'Seu e-mail ainda não foi confirmado. Verifique sua caixa de entrada e a pasta de spam para confirmar sua conta.';
+  }
+  if (normalizedMessage.includes('invalid login credentials')) {
+    return 'E-mail ou senha incorretos, ou a conta ainda não foi confirmada. Verifique os dados e tente novamente.';
+  }
+  if (
+    normalizedMessage.includes('profiles') ||
+    normalizedMessage.includes('schema cache') ||
+    normalizedMessage.includes('row-level security') ||
+    normalizedMessage.includes('permission denied')
+  ) {
+    return `O login foi iniciado, mas houve um erro ao carregar o perfil do banco: ${message}`;
+  }
+  if (normalizedMessage.includes('failed to fetch') || normalizedMessage.includes('network')) {
+    return 'Não foi possível conectar ao Supabase. Confira a conexão e as variáveis do .env.local.';
+  }
+
+  return message ? `Falha no login: ${message}` : 'Não foi possível entrar. Tente novamente.';
+}
 
 interface LoginPageProps {
   onLoginSuccess: () => void;
@@ -25,13 +49,16 @@ export const LoginPage: React.FC<LoginPageProps> = ({
   onLoginSuccess,
   onNavigateToRegister
 }) => {
-  const [email, setEmail] = useState('carlos.mendes@email.com');
-  const [password, setPassword] = useState('123456');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [forgotPasswordOpen, setForgotPasswordOpen] = useState(false);
   const [forgotEmail, setForgotEmail] = useState('');
   const [forgotSuccess, setForgotSuccess] = useState(false);
+  const [forgotError, setForgotError] = useState('');
+  const [isSendingReset, setIsSendingReset] = useState(false);
   const [showMatriculaLogin, setShowMatriculaLogin] = useState(false);
   const [matricula, setMatricula] = useState('');
   const [socialLoading, setSocialLoading] = useState<'google' | 'apple' | null>(null);
@@ -41,47 +68,66 @@ export const LoginPage: React.FC<LoginPageProps> = ({
     onClose: () => setForgotPasswordOpen(false)
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email.trim() || !password.trim()) {
       setError('Por favor, preencha seu e-mail e senha.');
       return;
     }
     setError('');
-    authService.login(email.trim(), password);
-    onLoginSuccess();
+    setIsSubmitting(true);
+    try {
+      await authService.login(email.trim(), password);
+      onLoginSuccess();
+    } catch (error) {
+      setError(getLoginErrorMessage(error));
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  const handleMatriculaSubmit = (e: React.FormEvent) => {
+  const handleMatriculaSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!matricula.trim() || !password.trim()) {
       setError('Informe o número da sua matrícula e senha.');
       return;
     }
     setError('');
-    authService.login(`aluno.${matricula.trim()}@academia.com`, password);
-    onLoginSuccess();
-  };
-
-  const handleSocialLogin = (provider: 'google' | 'apple') => {
-    setSocialLoading(provider);
-    setTimeout(() => {
-      setSocialLoading(null);
-      // Login preparado com a conta existente do aluno
-      authService.login('carlos.mendes@email.com', 'social-auth');
+    setIsSubmitting(true);
+    try {
+      await authService.login(`aluno.${matricula.trim()}@academia.com`, password);
       onLoginSuccess();
-    }, 700);
+    } catch {
+      setError('Não foi possível entrar com essa matrícula. Confira os dados e tente novamente.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  const handleForgotSubmit = (e: React.FormEvent) => {
+  const handleSocialLogin = async (provider: 'google' | 'apple') => {
+    setSocialLoading(provider);
+    setError('');
+    try {
+      await authService.loginWithProvider(provider);
+    } catch {
+      setSocialLoading(null);
+      setError(`Não foi possível conectar com ${provider === 'google' ? 'Google' : 'Apple'}. Verifique se o provedor está habilitado no Supabase.`);
+    }
+  };
+
+  const handleForgotSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!forgotEmail.trim()) return;
-    setForgotSuccess(true);
-    setTimeout(() => {
-      setForgotSuccess(false);
-      setForgotPasswordOpen(false);
-      setForgotEmail('');
-    }, 2800);
+    setForgotError('');
+    setIsSendingReset(true);
+    try {
+      await authService.resetPassword(forgotEmail.trim());
+      setForgotSuccess(true);
+    } catch {
+      setForgotError('Não foi possível enviar o link. Confira a configuração de e-mail do Supabase e tente novamente.');
+    } finally {
+      setIsSendingReset(false);
+    }
   };
 
   return (
@@ -204,9 +250,10 @@ export const LoginPage: React.FC<LoginPageProps> = ({
 
               <button
                 type="submit"
-                className="w-full py-3 px-6 rounded-xl bg-gradient-to-r from-[#842BAF] to-[#681791] text-white font-semibold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(132,43,175,0.4)] hover:shadow-[0_0_28px_rgba(183,132,230,0.6)] active:scale-95 transition-all mt-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#B784E6]"
+                disabled={isSubmitting}
+                className="w-full py-3 px-6 rounded-xl bg-gradient-to-r from-[#842BAF] to-[#681791] text-white font-semibold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(132,43,175,0.4)] hover:shadow-[0_0_28px_rgba(183,132,230,0.6)] active:scale-95 transition-all mt-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#B784E6] disabled:opacity-60"
               >
-                <span>Entrar</span>
+                <span>{isSubmitting ? 'Entrando...' : 'Entrar'}</span>
                 <ArrowRight className="w-4 h-4" />
               </button>
             </form>
@@ -262,7 +309,8 @@ export const LoginPage: React.FC<LoginPageProps> = ({
 
               <button
                 type="submit"
-                className="w-full py-3 px-6 rounded-xl bg-gradient-to-r from-[#842BAF] to-[#681791] text-white font-semibold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(132,43,175,0.4)] active:scale-95 transition-all mt-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#B784E6]"
+                disabled={isSubmitting}
+                className="w-full py-3 px-6 rounded-xl bg-gradient-to-r from-[#842BAF] to-[#681791] text-white font-semibold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(132,43,175,0.4)] active:scale-95 transition-all mt-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#B784E6] disabled:opacity-60"
               >
                 <span>Acessar com Matrícula</span>
                 <ArrowRight className="w-4 h-4" />
@@ -348,20 +396,6 @@ export const LoginPage: React.FC<LoginPageProps> = ({
             </div>
           )}
 
-          {/* Atalho Demo Aluno */}
-          <div className="mt-3.5 pt-3 border-t border-white/5">
-            <button
-              type="button"
-              onClick={() => {
-                authService.login('carlos.mendes@email.com', 'demo123');
-                onLoginSuccess();
-              }}
-              className="w-full py-2 px-3 rounded-xl bg-[#171026] hover:bg-[#281B42] text-[11px] font-medium text-[#B784E6] border border-[#842BAF]/30 flex items-center justify-center gap-1.5 transition-colors"
-            >
-              <UserCheck className="w-3.5 h-3.5" />
-              <span>Acesso Rápido Aluno Demo (Carlos Mendes)</span>
-            </button>
-          </div>
         </div>
 
         {/* 5. Link Criar Conta */}
@@ -443,6 +477,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                     className="w-full bg-[#171026] border border-[#311C50] text-white text-xs rounded-xl p-3 focus:outline-none focus:border-[#B784E6] focus-visible:ring-2 focus-visible:ring-[#B784E6] placeholder-[#A59DB5]"
                   />
                 </div>
+                {forgotError && <p role="alert" className="text-left text-xs text-red-300">{forgotError}</p>}
 
                 <div className="flex gap-2 pt-1">
                   <button
@@ -454,9 +489,10 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                   </button>
                   <button
                     type="submit"
+                    disabled={isSendingReset}
                     className="flex-1 py-2.5 rounded-xl bg-[#842BAF] text-xs font-semibold text-white hover:bg-[#681791] shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#B784E6]"
                   >
-                    Enviar Link
+                    {isSendingReset ? 'Enviando...' : 'Enviar Link'}
                   </button>
                 </div>
               </form>
