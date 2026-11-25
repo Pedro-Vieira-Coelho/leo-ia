@@ -12,6 +12,8 @@ coverage/
 # Variáveis de ambiente
 .env*
 !.env.example
+.env.local
+supabase/.temp/
 
 # Sistema operacional
 .DS_Store

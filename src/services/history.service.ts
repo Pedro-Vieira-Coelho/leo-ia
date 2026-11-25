@@ -1,11 +1,16 @@
 import { HistoryStats, CalendarDayStatus, PastWorkoutLog } from '../models/history.model';
-import { INITIAL_HISTORY_STATS, INITIAL_PAST_WORKOUTS } from '../shared/constants';
+import { INITIAL_PAST_WORKOUTS } from '../shared/constants';
+
+function toDateKey(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
 
 class HistoryService {
-  private readonly STORAGE_KEY = 'leo_ia_history_logs_v2';
-  private stats: HistoryStats = INITIAL_HISTORY_STATS;
+  private readonly STORAGE_PREFIX = 'leo_ia_history_logs_v2';
+  private storageKey = `${this.STORAGE_PREFIX}:guest`;
   private pastWorkouts: PastWorkoutLog[] = [];
   private listeners: Array<() => void> = [];
+  private userScope = 'guest';
 
   constructor() {
     this.initHistory();
@@ -13,7 +18,7 @@ class HistoryService {
 
   private initHistory() {
     try {
-      const stored = localStorage.getItem(this.STORAGE_KEY);
+      const stored = localStorage.getItem(this.storageKey);
       if (stored) {
         const parsed: PastWorkoutLog[] = JSON.parse(stored);
         // Merge enriched exercise details if missing in stored data
@@ -27,63 +32,92 @@ class HistoryService {
           };
         });
       } else {
-        this.pastWorkouts = INITIAL_PAST_WORKOUTS;
+        this.pastWorkouts = this.userScope === 'guest' ? INITIAL_PAST_WORKOUTS : [];
         this.save();
       }
     } catch {
-      this.pastWorkouts = INITIAL_PAST_WORKOUTS;
+      this.pastWorkouts = this.userScope === 'guest' ? INITIAL_PAST_WORKOUTS : [];
     }
   }
 
   private save() {
     try {
-      localStorage.setItem(this.STORAGE_KEY, JSON.stringify(this.pastWorkouts));
+      localStorage.setItem(this.storageKey, JSON.stringify(this.pastWorkouts));
     } catch {
       // ignore
     }
   }
 
+  public setUserScope(userId: string | null): void {
+    const nextScope = userId ?? 'guest';
+    if (nextScope === this.userScope) return;
+
+    this.userScope = nextScope;
+    this.storageKey = `${this.STORAGE_PREFIX}:${nextScope}`;
+    this.initHistory();
+    this.notify();
+  }
+
   public getStats(filter: 'Semana' | 'Este mês' | 'Últimos 3 meses' = 'Este mês'): HistoryStats {
-    const totalCount = this.pastWorkouts.length;
-    
-    if (filter === 'Semana') {
-      return {
-        totalWorkouts: Math.min(4, totalCount),
-        weeklyPace: '4x',
-        activeStreakDays: this.stats.activeStreakDays,
-        completionRatePercent: 100,
-        focusIncreasePercent: 18
-      };
+    const filteredWorkouts = this.getPastWorkouts(filter);
+    const today = new Date();
+    const todayKey = toDateKey(today);
+    const last28DaysStart = new Date(today);
+    last28DaysStart.setDate(today.getDate() - 27);
+    const last28DaysStartKey = toDateKey(last28DaysStart);
+    const workoutDays = new Set(
+      this.pastWorkouts
+        .map(workout => workout.dateKey)
+        .filter((dateKey): dateKey is string => Boolean(dateKey)),
+    );
+
+    let activeStreakDays = 0;
+    const streakDate = new Date(today);
+    if (!workoutDays.has(todayKey)) streakDate.setDate(streakDate.getDate() - 1);
+    while (workoutDays.has(toDateKey(streakDate))) {
+      activeStreakDays += 1;
+      streakDate.setDate(streakDate.getDate() - 1);
     }
 
-    if (filter === 'Últimos 3 meses') {
-      return {
-        totalWorkouts: this.stats.totalWorkouts + (totalCount - INITIAL_PAST_WORKOUTS.length),
-        weeklyPace: '4.1x',
-        activeStreakDays: this.stats.activeStreakDays,
-        completionRatePercent: 96,
-        focusIncreasePercent: 22
-      };
-    }
+    const recentWorkoutCount = this.pastWorkouts.filter(workout =>
+      Boolean(workout.dateKey) &&
+      workout.dateKey! >= last28DaysStartKey &&
+      workout.dateKey! <= todayKey,
+    ).length;
+    const weeklyPace = Number((recentWorkoutCount / 4).toFixed(1)).toString();
+    const completionRatePercent = filteredWorkouts.length
+      ? Math.round(
+        (filteredWorkouts.filter(workout => workout.status === 'Concluído').length /
+          filteredWorkouts.length) * 100,
+      )
+      : 0;
 
-    // 'Este mês'
     return {
-      totalWorkouts: this.stats.totalWorkouts + (totalCount - INITIAL_PAST_WORKOUTS.length),
-      weeklyPace: '4x',
-      activeStreakDays: this.stats.activeStreakDays,
-      completionRatePercent: 96,
-      focusIncreasePercent: 18
+      totalWorkouts: filteredWorkouts.length,
+      weeklyPace: `${weeklyPace}x`,
+      activeStreakDays,
+      completionRatePercent,
+      focusIncreasePercent: 0,
     };
   }
 
   public getPastWorkouts(filter: 'Semana' | 'Este mês' | 'Últimos 3 meses' = 'Este mês'): PastWorkoutLog[] {
+    const today = new Date();
+    let startDate: Date;
     if (filter === 'Semana') {
-      return this.pastWorkouts.slice(0, 3);
+      startDate = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+      startDate.setDate(startDate.getDate() - ((startDate.getDay() + 6) % 7));
+    } else if (filter === 'Últimos 3 meses') {
+      startDate = new Date(today.getFullYear(), today.getMonth() - 2, 1);
+    } else {
+      startDate = new Date(today.getFullYear(), today.getMonth(), 1);
     }
-    if (filter === 'Últimos 3 meses') {
-      return this.pastWorkouts;
-    }
-    return this.pastWorkouts;
+
+    const startKey = toDateKey(startDate);
+    const endKey = toDateKey(today);
+    return this.pastWorkouts.filter(workout =>
+      Boolean(workout.dateKey) && workout.dateKey! >= startKey && workout.dateKey! <= endKey,
+    );
   }
 
   public getWorkoutsByDateKey(dateKey: string): PastWorkoutLog[] {
@@ -96,9 +130,7 @@ class HistoryService {
    * When integrating a real backend, this will persist to a database via an API endpoint.
    */
   public addWorkoutLog(log: Omit<PastWorkoutLog, 'id'>) {
-    const today = new Date();
-    const dateKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
-    const targetDateKey = log.dateKey || dateKey;
+    const targetDateKey = log.dateKey || toDateKey(new Date());
 
     // Idempotency: avoid immediate identical re-logging if latest entry matches
     if (this.pastWorkouts.length > 0) {
@@ -110,13 +142,11 @@ class HistoryService {
 
     const newEntry: PastWorkoutLog = {
       ...log,
-      id: `past_${Date.now()}`,
+      id: `past_${crypto.randomUUID()}`,
       dateKey: targetDateKey
     };
 
     this.pastWorkouts.unshift(newEntry);
-    this.stats.totalWorkouts += 1;
-    this.stats.activeStreakDays += 1;
     this.save();
     this.notify();
   }
@@ -126,9 +156,6 @@ class HistoryService {
    * and workout indicators matched with recorded past workouts.
    */
   public getMonthCalendarDays(year: number, month: number): CalendarDayStatus[] {
-    // Reference workout days in October 2026:
-    const defaultOctWorkoutDays = new Set([2, 4, 6, 8, 9, 11, 13, 15, 16, 18, 20, 22, 23, 25, 27]);
-
     const firstDayOfMonth = new Date(year, month - 1, 1);
     const startDayOfWeek = firstDayOfMonth.getDay(); // 0 = Dom, 1 = Seg, ...
     const totalDaysInMonth = new Date(year, month, 0).getDate();
@@ -160,11 +187,9 @@ class HistoryService {
       const dayOfWeek = (startDayOfWeek + d - 1) % 7;
 
       // Check if pastWorkouts contains a workout on this date
-      const hasRecordedWorkout = this.pastWorkouts.some(w => w.dateKey === dateKey);
-      const isOctWorkout = year === 2026 && month === 10 && defaultOctWorkoutDays.has(d);
-      const hasWorkout = hasRecordedWorkout || isOctWorkout;
-
-      const isToday = (year === 2026 && month === 10 && d === 27);
+      const workout = this.pastWorkouts.find(w => w.dateKey === dateKey);
+      const hasWorkout = Boolean(workout);
+      const isToday = dateKey === toDateKey(new Date());
 
       days.push({
         dayNumber: d,
@@ -175,7 +200,7 @@ class HistoryService {
         hasWorkout,
         isToday,
         dateKey,
-        workoutCode: hasWorkout ? (d % 3 === 0 ? 'Treino B' : d % 2 === 0 ? 'Treino A' : 'Treino C') : undefined
+        workoutCode: workout?.workoutCode
       });
     }
 

@@ -1,53 +1,123 @@
-import { WorkoutSession, Exercise } from '../models/workout.model';
+import { Exercise, WorkoutSession } from '../models/workout.model';
 import { INITIAL_WORKOUTS } from '../shared/constants';
+import { getSupabaseClient } from './supabase.client';
+
+type WorkoutCode = WorkoutSession['code'];
+
+const WORKOUT_CODES: WorkoutCode[] = ['Treino A', 'Treino B', 'Treino C', 'Treino D'];
+const LEGACY_STORAGE_PREFIX = 'leo_ia_workouts_state';
+const ACTIVE_WORKOUT_PREFIX = 'leo_ia_active_workout_code';
+
+function cloneWorkouts(workouts: WorkoutSession[]): WorkoutSession[] {
+  return JSON.parse(JSON.stringify(workouts)) as WorkoutSession[];
+}
+
+function isWorkoutSession(value: unknown): value is WorkoutSession {
+  if (!value || typeof value !== 'object') return false;
+  const workout = value as Partial<WorkoutSession>;
+  return (
+    typeof workout.code === 'string' &&
+    WORKOUT_CODES.includes(workout.code as WorkoutCode) &&
+    typeof workout.title === 'string' &&
+    Array.isArray(workout.exercises)
+  );
+}
+
+function mergeInitialExerciseDetails(workout: WorkoutSession): WorkoutSession {
+  const initialWorkout = INITIAL_WORKOUTS.find((item) => item.code === workout.code);
+  if (!initialWorkout) return workout;
+
+  return {
+    ...workout,
+    exercises: workout.exercises.map((exercise) => {
+      const initialExercise = initialWorkout.exercises.find((item) => item.id === exercise.id);
+      if (!initialExercise) return exercise;
+      return {
+        ...exercise,
+        previousPerformance: exercise.previousPerformance || initialExercise.previousPerformance,
+        postureTip: exercise.postureTip || initialExercise.postureTip,
+      };
+    }),
+  };
+}
+
+function reportSaveError(error: unknown): void {
+  const message = error instanceof Error ? error.message : 'Não foi possível salvar seus treinos.';
+  window.dispatchEvent(new CustomEvent('app:error', { detail: message }));
+}
 
 class WorkoutService {
-  private readonly STORAGE_KEY = 'leo_ia_workouts_state';
-  private workouts: WorkoutSession[] = [];
-  private activeWorkoutCode: WorkoutSession['code'] = 'Treino A';
+  private workouts = cloneWorkouts(INITIAL_WORKOUTS);
+  private activeWorkoutCode: WorkoutCode = INITIAL_WORKOUTS[0].code;
   private listeners: Array<() => void> = [];
+  private userId: string | null = null;
+  private isReady = false;
+  private scopeVersion = 0;
+  private saveQueue: Promise<void> = Promise.resolve();
 
-  constructor() {
-    this.initWorkouts();
-  }
+  public async setUserScope(userId: string | null): Promise<void> {
+    const version = ++this.scopeVersion;
+    this.userId = userId;
+    this.isReady = false;
+    this.workouts = cloneWorkouts(INITIAL_WORKOUTS);
+    this.activeWorkoutCode = INITIAL_WORKOUTS[0].code;
 
-  private initWorkouts() {
-    try {
-      const stored = localStorage.getItem(this.STORAGE_KEY);
-      if (stored) {
-        const parsed: WorkoutSession[] = JSON.parse(stored);
-        // Merge metadata (postureTip, previousPerformance) from INITIAL_WORKOUTS if missing
-        this.workouts = parsed.map(w => {
-          const initialW = INITIAL_WORKOUTS.find(iw => iw.code === w.code);
-          if (!initialW) return w;
-          return {
-            ...w,
-            exercises: w.exercises.map(ex => {
-              const initEx = initialW.exercises.find(ie => ie.id === ex.id);
-              if (!initEx) return ex;
-              return {
-                ...ex,
-                previousPerformance: ex.previousPerformance || initEx.previousPerformance,
-                postureTip: ex.postureTip || initEx.postureTip,
-              };
-            })
-          };
-        });
-      } else {
-        this.workouts = JSON.parse(JSON.stringify(INITIAL_WORKOUTS));
-        this.save();
+    if (!userId) {
+      this.isReady = true;
+      this.notify();
+      return;
+    }
+
+    await this.saveQueue.catch(() => undefined);
+    if (version !== this.scopeVersion) return;
+
+    const legacyStorageKey = `${LEGACY_STORAGE_PREFIX}:${userId}`;
+    const activeStorageKey = `${ACTIVE_WORKOUT_PREFIX}:${userId}`;
+    const { data, error } = await getSupabaseClient()
+      .from('workouts')
+      .select('code, payload')
+      .eq('user_id', userId);
+
+    if (version !== this.scopeVersion) return;
+    if (error) throw new Error(`Não foi possível carregar seus treinos: ${error.message}`);
+
+    const rows = (data ?? []) as Array<{ code: string; payload: unknown }>;
+    if (rows.length > 0) {
+      const remoteWorkouts = rows.map((row) => {
+        if (!isWorkoutSession(row.payload) || row.payload.code !== row.code) {
+          throw new Error(`O treino "${row.code}" no Supabase está em um formato inválido.`);
+        }
+        return row.payload;
+      });
+      this.workouts = remoteWorkouts.map(mergeInitialExerciseDetails);
+    } else {
+      const legacyState = localStorage.getItem(legacyStorageKey);
+      if (legacyState) {
+        let parsed: unknown;
+        try {
+          parsed = JSON.parse(legacyState);
+        } catch {
+          throw new Error('O cache local dos treinos está corrompido e não pôde ser migrado.');
+        }
+
+        if (!Array.isArray(parsed) || parsed.length === 0 || !parsed.every(isWorkoutSession)) {
+          throw new Error('O cache local dos treinos está em um formato inválido e não pôde ser migrado.');
+        }
+        this.workouts = parsed.map(mergeInitialExerciseDetails);
       }
-    } catch {
-      this.workouts = JSON.parse(JSON.stringify(INITIAL_WORKOUTS));
-    }
-  }
 
-  private save() {
-    try {
-      localStorage.setItem(this.STORAGE_KEY, JSON.stringify(this.workouts));
-    } catch {
-      // ignore
+      await this.persistWorkouts(userId, this.workouts);
+      if (version !== this.scopeVersion) return;
+      if (legacyState) localStorage.removeItem(legacyStorageKey);
     }
+
+    const storedActiveCode = localStorage.getItem(activeStorageKey);
+    if (storedActiveCode && WORKOUT_CODES.includes(storedActiveCode as WorkoutCode)) {
+      this.activeWorkoutCode = storedActiveCode as WorkoutCode;
+    }
+
+    this.isReady = true;
+    this.notify();
   }
 
   public getWorkouts(): WorkoutSession[] {
@@ -55,129 +125,144 @@ class WorkoutService {
   }
 
   public getActiveWorkout(): WorkoutSession {
-    const found = this.workouts.find(w => w.code === this.activeWorkoutCode);
-    return found || this.workouts[0];
+    return this.workouts.find((workout) => workout.code === this.activeWorkoutCode) ?? this.workouts[0];
   }
 
-  public setActiveWorkoutCode(code: WorkoutSession['code']) {
+  public setActiveWorkoutCode(code: WorkoutCode): void {
+    if (!this.workouts.some((workout) => workout.code === code)) return;
     this.activeWorkoutCode = code;
+    if (this.userId) localStorage.setItem(`${ACTIVE_WORKOUT_PREFIX}:${this.userId}`, code);
     this.notify();
-  }
-
-  public toggleSetCompletion(exerciseId: string, setNumber: number) {
-    const currentWorkout = this.getActiveWorkout();
-    const ex = currentWorkout.exercises.find(e => e.id === exerciseId);
-    if (!ex) return;
-
-    const setObj = ex.sets.find(s => s.setNumber === setNumber);
-    if (setObj) {
-      setObj.completed = !setObj.completed;
-    }
-
-    // Check if all sets are completed
-    ex.completed = ex.sets.every(s => s.completed);
-    this.save();
-    this.notify();
-  }
-
-  public toggleExerciseCompletion(exerciseId: string) {
-    const currentWorkout = this.getActiveWorkout();
-    const ex = currentWorkout.exercises.find(e => e.id === exerciseId);
-    if (!ex) return;
-
-    const newState = !ex.completed;
-    ex.completed = newState;
-    ex.sets.forEach(s => {
-      s.completed = newState;
-    });
-
-    this.save();
-    this.notify();
-  }
-
-  public updateSetWeight(exerciseId: string, setNumber: number, weightKg: number) {
-    const currentWorkout = this.getActiveWorkout();
-    const ex = currentWorkout.exercises.find(e => e.id === exerciseId);
-    if (!ex) return;
-
-    const setObj = ex.sets.find(s => s.setNumber === setNumber);
-    if (setObj) {
-      setObj.weightKg = Math.max(0, weightKg);
-      this.save();
-      this.notify();
-    }
-  }
-
-  public swapWithAlternative(exerciseId: string, alternativeIndex: number): Exercise | null {
-    const currentWorkout = this.getActiveWorkout();
-    const exIndex = currentWorkout.exercises.findIndex(e => e.id === exerciseId);
-    if (exIndex === -1) return null;
-
-    const oldEx = currentWorkout.exercises[exIndex];
-    const alt = oldEx.alternatives[alternativeIndex];
-    if (!alt) return null;
-
-    // Create swapped exercise preserving sets structure
-    const updatedEx: Exercise = {
-      ...oldEx,
-      name: alt.name,
-      targetArea: alt.focus,
-      leoTip: `Adaptação LÉO ativada: ${alt.reason} Equipamento sugerido: ${alt.equipment}.`,
-      currentAlternativeIndex: alternativeIndex
-    };
-
-    currentWorkout.exercises[exIndex] = updatedEx;
-    this.save();
-    this.notify();
-    return updatedEx;
   }
 
   public calculateProgress(workout: WorkoutSession): { completed: number; total: number; percentage: number } {
     const total = workout.exercises.length;
-    if (total === 0) return { completed: 0, total: 0, percentage: 0 };
-    const completed = workout.exercises.filter(e => e.completed).length;
-    const percentage = Math.round((completed / total) * 100);
-    return { completed, total, percentage };
+    const completed = workout.exercises.filter((exercise) => exercise.completed).length;
+    return {
+      completed,
+      total,
+      percentage: total === 0 ? 0 : Math.round((completed / total) * 100),
+    };
   }
 
-  public resetCurrentWorkout() {
-    const current = this.getActiveWorkout();
-    current.exercises.forEach(e => {
-      e.completed = false;
-      e.sets.forEach(s => {
-        s.completed = false;
+  public toggleSetCompletion(exerciseId: string, setNumber: number): void {
+    this.updateActiveWorkout((workout) => {
+      const exercise = workout.exercises.find((item) => item.id === exerciseId);
+      const set = exercise?.sets.find((item) => item.setNumber === setNumber);
+      if (!exercise || !set) return;
+      set.completed = !set.completed;
+      exercise.completed = exercise.sets.length > 0 && exercise.sets.every((item) => item.completed);
+    });
+  }
+
+  public toggleExerciseCompletion(exerciseId: string): void {
+    this.updateActiveWorkout((workout) => {
+      const exercise = workout.exercises.find((item) => item.id === exerciseId);
+      if (!exercise) return;
+      exercise.completed = !exercise.completed;
+      exercise.sets.forEach((set) => {
+        set.completed = exercise.completed;
       });
     });
-    this.save();
+  }
+
+  public updateSetWeight(exerciseId: string, setNumber: number, weightKg: number): void {
+    this.updateActiveWorkout((workout) => {
+      const set = workout.exercises
+        .find((item) => item.id === exerciseId)
+        ?.sets.find((item) => item.setNumber === setNumber);
+      if (set) set.weightKg = weightKg;
+    });
+  }
+
+  public swapWithAlternative(exerciseId: string, alternativeIndex: number): Exercise | null {
+    const workout = this.getActiveWorkout();
+    const exerciseIndex = workout.exercises.findIndex((item) => item.id === exerciseId);
+    if (exerciseIndex === -1) return null;
+
+    const exercise = workout.exercises[exerciseIndex];
+    const alternative = exercise.alternatives[alternativeIndex];
+    if (!alternative) return null;
+
+    const updatedExercise: Exercise = {
+      ...exercise,
+      name: alternative.name,
+      targetArea: alternative.focus,
+      leoTip: `Adaptação LÉO ativada: ${alternative.reason} Equipamento sugerido: ${alternative.equipment}.`,
+      currentAlternativeIndex: alternativeIndex,
+    };
+    workout.exercises[exerciseIndex] = updatedExercise;
+    this.workouts = [...this.workouts];
     this.notify();
+    this.enqueueSave();
+    return updatedExercise;
+  }
+
+  public resetCurrentWorkout(): void {
+    this.updateActiveWorkout((workout) => {
+      workout.exercises.forEach((exercise) => {
+        exercise.completed = false;
+        exercise.sets.forEach((set) => {
+          set.completed = false;
+        });
+      });
+    });
   }
 
   public completeFullWorkout(): { title: string; minutes: number } {
-    const current = this.getActiveWorkout();
-    current.exercises.forEach(e => {
-      e.completed = true;
-      e.sets.forEach(s => {
-        s.completed = true;
+    const workout = this.getActiveWorkout();
+    this.updateActiveWorkout((active) => {
+      active.exercises.forEach((exercise) => {
+        exercise.completed = true;
+        exercise.sets.forEach((set) => {
+          set.completed = true;
+        });
       });
+      active.lastCompletedDate = new Date().toISOString();
     });
-    current.lastCompletedDate = new Date().toISOString();
-    this.save();
+    return { title: workout.title, minutes: workout.estimatedDurationMin };
+  }
+
+  private updateActiveWorkout(update: (workout: WorkoutSession) => void): void {
+    const workout = this.getActiveWorkout();
+    update(workout);
+    this.workouts = [...this.workouts];
     this.notify();
-    return {
-      title: current.title,
-      minutes: current.estimatedDurationMin
-    };
+    this.enqueueSave();
+  }
+
+  private enqueueSave(): void {
+    if (!this.userId || !this.isReady) return;
+    const userId = this.userId;
+    const snapshot = cloneWorkouts(this.workouts);
+    this.saveQueue = this.saveQueue
+      .catch(() => undefined)
+      .then(() => this.persistWorkouts(userId, snapshot))
+      .catch((error: unknown) => reportSaveError(error));
+  }
+
+  private async persistWorkouts(userId: string, workouts: WorkoutSession[]): Promise<void> {
+    const rows = workouts.map((workout) => ({
+      user_id: userId,
+      code: workout.code,
+      title: workout.title,
+      payload: workout,
+    }));
+    const { error } = await getSupabaseClient()
+      .from('workouts')
+      .upsert(rows, { onConflict: 'user_id,code' });
+    if (error) throw new Error(`Não foi possível salvar seus treinos: ${error.message}`);
   }
 
   public subscribe(listener: () => void): () => void {
     this.listeners.push(listener);
     return () => {
-      this.listeners = this.listeners.filter(l => l !== listener);
+      this.listeners = this.listeners.filter((item) => item !== listener);
     };
   }
 
-  private notify() {
-    this.listeners.forEach(l => l());
+  private notify(): void {
+    this.listeners.forEach((listener) => listener());
   }
 }
 

@@ -15,13 +15,10 @@ export const PreferencesPage: React.FC<PreferencesPageProps> = ({
   onBack
 }) => {
   const [primaryGoal, setPrimaryGoal] = useState<UserProfile['primaryGoal']>('Hipertrofia & Força Funcional');
-  const [biomechanicalFocus, setBiomechanicalFocus] = useState('Preservação articular de ombros e lombar');
-  const [limitations, setLimitations] = useState<string[]>([
-    'Desconforto leve no Supino',
-    'Adaptação barra para halteres'
-  ]);
+  const [biomechanicalFocus, setBiomechanicalFocus] = useState('');
+  const [limitations, setLimitations] = useState<string[]>([]);
   const [customLimitation, setCustomLimitation] = useState('');
-  const [additionalNotes, setAdditionalNotes] = useState('Histórico prévio de tendinite no ombro direito. Priorizar pegada neutra.');
+  const [additionalNotes, setAdditionalNotes] = useState('');
 
   const goalsList: Array<{ title: UserProfile['primaryGoal']; desc: string; icon: any }> = [
     { title: 'Hipertrofia & Força Funcional', desc: 'Aumento de massa magra com amplitude e proteção articular', icon: Zap },
