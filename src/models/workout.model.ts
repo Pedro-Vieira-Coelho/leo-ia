@@ -41,6 +41,8 @@ export interface Exercise {
 
 export interface WorkoutSession {
   id: string;
+  /** Indicates that this workout is a generic starter template, not an individualized plan. */
+  isTemplate?: boolean;
   code: 'Treino A' | 'Treino B' | 'Treino C' | 'Treino D';
   title: string;
   focusMuscles: string[];

@@ -1,10 +1,9 @@
 import React, { useState } from 'react';
-import { UserProfile, InstructorSharingSettings, NotificationCategories } from '../models/user.model';
+import { UserProfile } from '../models/user.model';
 import { authService } from '../services/auth.service';
 import { LEO_OFFICIAL_AVATAR } from '../shared/constants';
 import {
   Edit3,
-  Share2,
   MapPin,
   Award,
   Clock,
@@ -22,7 +21,6 @@ import {
   UserCheck,
   ChevronDown,
   X,
-  AlertTriangle,
   Send,
   Check,
   Phone,
@@ -31,7 +29,6 @@ import {
   Activity,
   Layers,
   Sparkles,
-  Info
 } from 'lucide-react';
 
 interface ProfilePageProps {
@@ -50,16 +47,9 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
   // Modais de Controle
   const [editProfileOpen, setEditProfileOpen] = useState(false);
   const [leoPrefsOpen, setLeoPrefsOpen] = useState(false);
-  const [gymAffiliationModalOpen, setGymAffiliationModalOpen] = useState(false);
-  const [leaveGymConfirmOpen, setLeaveGymConfirmOpen] = useState(false);
-  const [sharingModalOpen, setSharingModalOpen] = useState(false);
-  const [notificationsModalOpen, setNotificationsModalOpen] = useState(false);
   const [helpSupportModalOpen, setHelpSupportModalOpen] = useState(false);
   const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
   const [biomechanicsModalOpen, setBiomechanicsModalOpen] = useState(false);
-
-  // Feedback de compartilhamento de perfil
-  const [shareFeedback, setShareFeedback] = useState(false);
 
   // Estados dos Campos de Edição de Dados Pessoais
   const [name, setName] = useState(user.name);
@@ -69,33 +59,13 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
   const [weight, setWeight] = useState(user.weightKg);
   const [height, setHeight] = useState(user.heightCm);
   const [avatarUrl, setAvatarUrl] = useState(user.avatarUrl);
+  const [avatarPreviewFailed, setAvatarPreviewFailed] = useState(false);
 
   // Estados de Personalização do LÉO IA
   const [voiceTone, setVoiceTone] = useState(user.leoPreferences.voiceTone);
   const [restDuration, setRestDuration] = useState(user.leoPreferences.restDurationSeconds);
   const [customRestInput, setCustomRestInput] = useState(String(user.leoPreferences.customRestSeconds || user.leoPreferences.restDurationSeconds));
   const [isCustomRestMode, setIsCustomRestMode] = useState(![45, 60, 90, 120].includes(user.leoPreferences.restDurationSeconds));
-
-  // Configurações de Notificação
-  const [notificationCategories, setNotificationCategories] = useState<NotificationCategories>(
-    user.notificationCategories || {
-      workoutReminders: true,
-      restReminders: true,
-      leoMessages: true,
-      instructorNotices: true,
-    }
-  );
-
-  // Configurações de Compartilhamento com Instrutor
-  const [sharingSettings, setSharingSettings] = useState<InstructorSharingSettings>(
-    user.sharingSettings || {
-      recentWorkouts: true,
-      exercisesAndWeights: true,
-      evolutionMetrics: true,
-      limitationsAndNotes: true,
-      duration: 'continuous',
-    }
-  );
 
   // Edição Biomecânica Rápida
   const [primaryGoal, setPrimaryGoal] = useState(user.primaryGoal);
@@ -109,14 +79,6 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
   const [supportCategory, setSupportCategory] = useState('Falha na interface');
   const [supportDescription, setSupportDescription] = useState('');
   const [supportSuccess, setSupportSuccess] = useState(false);
-
-  // Academias Parceiras para Simulação de Troca
-  const availableGyms = [
-    { name: 'Academia Viva', branch: 'Unidade Jardins', instructor: 'Prof. Carlos Silva', cref: 'CREF 084920-G/SP' },
-    { name: 'SmartFit', branch: 'Unidade Paulista', instructor: 'Profa. Mariana Costa', cref: 'CREF 091440-G/SP' },
-    { name: 'Bio Ritmo', branch: 'Unidade Itaim Bibi', instructor: 'Prof. Roberto Albuquerque', cref: 'CREF 076510-G/SP' },
-    { name: 'Bodytech', branch: 'Unidade Faria Lima', instructor: 'Profa. Juliana Prado', cref: 'CREF 082330-G/SP' },
-  ];
 
   // 1. Salvar Dados Pessoais
   const handleSaveProfile = (e: React.FormEvent) => {
@@ -176,61 +138,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
     setLimitations(limitations.filter(l => l !== item));
   };
 
-  // 4. Trocar Academia
-  const handleSelectGym = (gym: typeof availableGyms[0]) => {
-    authService.changeGym(gym.name, gym.branch, gym.instructor, gym.cref);
-    setGymAffiliationModalOpen(false);
-  };
-
-  // 5. Encerrar Vínculo com Academia (Preservando 100% dos dados)
-  const handleConfirmLeaveGym = () => {
-    authService.leaveGym();
-    setLeaveGymConfirmOpen(false);
-  };
-
-  // 6. Salvar Compartilhamento
-  const handleToggleSharingCategory = (key: keyof Omit<InstructorSharingSettings, 'duration'>) => {
-    const updated = { ...sharingSettings, [key]: !sharingSettings[key] };
-    setSharingSettings(updated);
-    authService.updateSharingSettings(updated);
-  };
-
-  const handleSetSharingDuration = (duration: InstructorSharingSettings['duration']) => {
-    const updated = { ...sharingSettings, duration };
-    setSharingSettings(updated);
-    authService.updateSharingSettings(updated);
-  };
-
-  const handleRevokeAllSharing = () => {
-    const revoked: InstructorSharingSettings = {
-      recentWorkouts: false,
-      exercisesAndWeights: false,
-      evolutionMetrics: false,
-      limitationsAndNotes: false,
-      duration: 'continuous'
-    };
-    setSharingSettings(revoked);
-    authService.updateSharingSettings(revoked);
-  };
-
-  // 7. Notificações
-  const handleToggleNotificationCategory = (key: keyof NotificationCategories) => {
-    const updated = { ...notificationCategories, [key]: !notificationCategories[key] };
-    setNotificationCategories(updated);
-    authService.updateNotificationCategories(updated);
-  };
-
-  const handleToggleGeneralPush = () => {
-    const newState = !user.accountSettings.pushNotifications;
-    authService.updateUser({
-      accountSettings: {
-        ...user.accountSettings,
-        pushNotifications: newState
-      }
-    });
-  };
-
-  // 8. Relatar Problema
+  // 4. Relatar Problema
   const handleSendSupportTicket = (e: React.FormEvent) => {
     e.preventDefault();
     if (!supportDescription.trim()) return;
@@ -242,12 +150,9 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
     }, 2000);
   };
 
-  const handleShare = () => {
-    setShareFeedback(true);
-    setTimeout(() => setShareFeedback(false), 2500);
-  };
-
-  const isAffiliated = user.gymAffiliationStatus !== 'Sem vínculo' && user.gymName !== 'Treino Autônomo';
+  const isAutonomous = user.gymAffiliationStatus === 'Sem vínculo' || user.gymName === 'Treino Autônomo';
+  const hasGymDetails = Boolean(user.gymName && user.gymName !== 'Treino Autônomo');
+  const hasInstructorDetails = Boolean(user.instructorName && !user.instructorName.toLowerCase().includes('nenhum'));
 
   return (
     <div className="space-y-4 px-4 pt-3.5 pb-safe-nav animate-fadeIn">
@@ -256,7 +161,8 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
         <div className="flex items-center gap-3.5 mb-3.5">
           {/* Avatar com verificação */}
           <div className="relative shrink-0">
-            <div className="w-16 h-16 rounded-full overflow-hidden border-2 border-[#842BAF] bg-[#1F1433] shadow-md">
+            <div className="w-16 h-16 rounded-full overflow-hidden border-2 border-[#842BAF] bg-[#1F1433] shadow-md relative flex items-center justify-center">
+              <User className="w-7 h-7 text-[#8C849B]" aria-hidden="true" />
               <img
                 src={user.avatarUrl}
                 alt={user.name}
@@ -288,7 +194,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
             <p className="text-[11px] text-[#A59DB5] flex items-center gap-1 truncate mt-0.5">
               <MapPin className="w-3 h-3 text-[#8C849B] shrink-0" />
               <span className="truncate">
-                {isAffiliated ? `${user.gymName} — ${user.gymBranch}` : 'Treino Autônomo'}
+                {hasGymDetails ? user.gymName : 'Treino Autônomo'}
               </span>
             </p>
           </div>
@@ -316,7 +222,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
           </div>
         </div>
 
-        {/* Ações: Editar Dados e Compartilhar */}
+        {/* Ação de edição dos dados da conta */}
         <div className="flex items-center gap-2">
           <button
             type="button"
@@ -327,120 +233,61 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
             <span>Editar Dados da Conta</span>
           </button>
 
-          <button
-            type="button"
-            onClick={handleShare}
-            className="p-2 rounded-xl bg-[#1F1433] text-[#A59DB5] hover:text-white border border-white/10 transition-colors"
-            title="Compartilhar Perfil"
-          >
-            <Share2 className="w-3.5 h-3.5" />
-          </button>
         </div>
-
-        {shareFeedback && (
-          <p className="mt-2 text-center text-xs text-[#2BED77] animate-fadeIn">
-            Link do perfil copiado com sucesso!
-          </p>
-        )}
       </div>
 
       {/* Grid Responsivo para Tablets e Desktops (1 coluna no mobile, 2 colunas equilibradas em md/lg) */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
         {/* COLUNA ESQUERDA: Vínculo com Academia & Configurações da Conta */}
         <div className="space-y-4">
-          {/* 2. Vínculo com Academia & Instrutor (Separado dos Dados Pessoais) */}
           <div className="rounded-3xl bg-[#160E26] border border-white/10 p-4 shadow-sm space-y-3">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-2">
                 <Building2 className="w-4 h-4 text-[#B784E6]" />
-                <h2 className="text-sm font-heading font-bold text-white">
-                  Vínculo com Academia
-                </h2>
+                <h2 className="text-sm font-heading font-bold text-white">Academia e instrutor</h2>
               </div>
-              <span
-                className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
-                  isAffiliated
-                    ? 'bg-[#2BED77]/15 text-[#2BED77] border-[#2BED77]/30'
-                    : 'bg-white/10 text-[#A59DB5] border-white/10'
-                }`}
-              >
-                {user.gymAffiliationStatus || (isAffiliated ? 'Ativo' : 'Sem vínculo')}
+              <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full border border-white/10 bg-white/5 text-[#A59DB5]">
+                {isAutonomous ? 'Modo autônomo' : 'Dados informados'}
               </span>
             </div>
 
             <div className="p-3 rounded-2xl bg-[#1F1433]/60 border border-white/5 space-y-2 text-xs">
-              <div className="flex items-start justify-between">
-                <div>
-                  <span className="text-[10px] text-[#8C849B] block">Academia Atual</span>
-                  <span className="text-white font-semibold">
-                    {isAffiliated ? `${user.gymName} (${user.gymBranch})` : 'Treino Autônomo'}
-                  </span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setGymAffiliationModalOpen(true)}
-                  className="text-xs text-[#B784E6] hover:text-white font-semibold underline underline-offset-2"
-                >
-                  Trocar
-                </button>
+              <div>
+                <span className="text-[10px] text-[#8C849B] block">Academia informada no perfil</span>
+                <span className="text-white font-semibold">
+                  {hasGymDetails ? `${user.gymName}${user.gymBranch ? ` — ${user.gymBranch}` : ''}` : 'Treino Autônomo'}
+                </span>
               </div>
-
-              <div className="pt-1 border-t border-white/5 flex items-start justify-between">
-                <div>
-                  <span className="text-[10px] text-[#8C849B] block">Profissional Vinculado</span>
-                  <span className="text-white font-semibold">
-                    {isAffiliated ? `${user.instructorName} • ${user.instructorCref}` : 'Sem instrutor vinculado'}
-                  </span>
-                </div>
-                {isAffiliated && (
-                  <button
-                    type="button"
-                    onClick={() => setLeaveGymConfirmOpen(true)}
-                    className="text-xs text-red-400 hover:text-red-300 font-semibold"
-                  >
-                    Encerrar vínculo
-                  </button>
-                )}
+              <div className="pt-2 border-t border-white/5">
+                <span className="text-[10px] text-[#8C849B] block">Instrutor informado no perfil</span>
+                <span className="text-white font-semibold">
+                  {hasInstructorDetails ? `${user.instructorName}${user.instructorCref && user.instructorCref !== '—' ? ` · ${user.instructorCref}` : ''}` : 'Nenhum instrutor informado'}
+                </span>
               </div>
             </div>
 
-            {/* Garantia de Soberania do Histórico */}
-            <div className="flex items-start gap-2 p-2.5 rounded-xl bg-[#171026] text-[11px] text-[#D2A0FF] border border-[#842BAF]/20">
-              <Shield className="w-4 h-4 shrink-0 text-[#2BED77] mt-0.5" />
+            <div className="flex items-start gap-2 p-2.5 rounded-xl bg-[#171026] text-[11px] text-[#D2A0FF] border border-[#842BAF]/20" role="note">
+              <Shield className="w-4 h-4 shrink-0 text-[#B784E6] mt-0.5" />
               <span className="leading-snug">
-                Sua conta é 100% sua: ao trocar ou encerrar a academia, seus treinos, histórico e evolução permanecem intactos.
+                O app ainda não valida vínculos com academias ou instrutores, nem compartilha dados com eles. Os dados acima são apenas informações do seu perfil.
               </span>
             </div>
           </div>
-
           {/* 6. Configurações da Conta & Preferências do App */}
           <div className="rounded-3xl bg-[#160E26] border border-white/10 p-2 shadow-sm divide-y divide-white/5">
             {/* Notificações push */}
-            <div
-              onClick={() => setNotificationsModalOpen(true)}
-              className="p-3 flex items-center justify-between cursor-pointer hover:bg-white/[0.02] text-xs text-white"
-            >
+            <div className="p-3 flex items-center justify-between text-xs text-white" aria-disabled="true">
               <div className="flex items-center gap-2.5">
-                <Bell className="w-4 h-4 text-[#B784E6]" />
+                <Bell className="w-4 h-4 text-[#8C849B]" />
                 <div>
-                  <span className="block font-medium">Notificações e Avisos</span>
-                  <span className="text-[10px] text-[#8C849B]">Treinos, descanso e instrutor</span>
+                  <span className="block font-medium">Notificações push</span>
+                  <span className="text-[10px] text-[#8C849B]">Ainda não disponíveis nesta versão</span>
                 </div>
               </div>
-              <div className="flex items-center gap-1.5">
-                <span
-                  className={`text-[10px] px-2 py-0.5 rounded-full font-bold border ${
-                    user.accountSettings.pushNotifications
-                      ? 'bg-[#2BED77]/20 text-[#2BED77] border-[#2BED77]/30'
-                      : 'bg-white/5 text-[#A59DB5] border-white/10'
-                  }`}
-                >
-                  {user.accountSettings.pushNotifications ? 'Ativadas' : 'Desativadas'}
-                </span>
-                <ChevronRight className="w-4 h-4 text-[#8C849B]" />
-              </div>
+              <span className="text-[10px] px-2 py-0.5 rounded-full border border-white/10 bg-white/5 text-[#A59DB5]">
+                Indisponível
+              </span>
             </div>
-
             {/* Ajuda e Suporte */}
             <div
               onClick={() => setHelpSupportModalOpen(true)}
@@ -583,43 +430,35 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
             </button>
           </div>
 
-          {/* 5. Acompanhamento Profissional (Substituição de Compartilhamento) */}
           <div className="rounded-3xl bg-[#160E26] border border-white/10 p-4 shadow-sm space-y-3">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-2">
                 <UserCheck className="w-4 h-4 text-[#B784E6]" />
-                <h3 className="text-sm font-heading font-bold text-white">
-                  Acompanhamento Profissional
-                </h3>
+                <h3 className="text-sm font-heading font-bold text-white">Acompanhamento profissional</h3>
               </div>
-              <span className="text-[10px] text-[#2BED77] bg-[#2BED77]/10 px-2 py-0.5 rounded-full border border-[#2BED77]/25 font-semibold">
-                {isAffiliated ? 'Conectado' : 'Treino Autônomo'}
+              <span className="text-[10px] text-[#A59DB5] bg-white/5 px-2 py-0.5 rounded-full border border-white/10 font-semibold">
+                Em preparação
               </span>
             </div>
 
             <p className="text-xs text-[#A59DB5] leading-relaxed">
-              Controle exatamente quais dados de treino são compartilhados com {user.instructorName} e envie comunicados sobre dores ou ajustes.
+              O app ainda não tem uma área integrada para academias e instrutores. As preferências salvas na conta não concedem acesso aos seus dados.
             </p>
 
             <div className="grid grid-cols-2 gap-2 pt-1">
-              <button
-                type="button"
-                onClick={() => setSharingModalOpen(true)}
-                className="p-2.5 rounded-xl bg-[#1F1433] border border-white/5 text-left hover:border-[#842BAF]/40 transition-colors"
-              >
+              <div className="p-2.5 rounded-xl bg-[#1F1433] border border-white/5 text-left">
                 <Lock className="w-3.5 h-3.5 text-[#B784E6] mb-1" />
-                <span className="text-xs font-semibold text-white block">Permissões de Dados</span>
-                <span className="text-[10px] text-[#8C849B]">4 categorias</span>
-              </button>
-
+                <span className="text-xs font-semibold text-white block">Compartilhamento</span>
+                <span className="text-[10px] text-[#8C849B]">Não ativo nesta versão</span>
+              </div>
               <button
                 type="button"
                 onClick={onOpenInstructorModal}
-                className="p-2.5 rounded-xl bg-[#1F1433] border border-white/5 text-left hover:border-[#842BAF]/40 transition-colors"
+                className="p-2.5 rounded-xl bg-[#1F1433] border border-white/5 text-left hover:border-[#842BAF]/40 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#B784E6]"
               >
-                <Send className="w-3.5 h-3.5 text-[#2BED77] mb-1" />
-                <span className="text-xs font-semibold text-white block">Falar com Instrutor</span>
-                <span className="text-[10px] text-[#8C849B]">Mensagens & Histórico</span>
+                <Send className="w-3.5 h-3.5 text-[#B784E6] mb-1" />
+                <span className="text-xs font-semibold text-white block">Mensagens</span>
+                <span className="text-[10px] text-[#8C849B]">Envio indisponível</span>
               </button>
             </div>
           </div>
@@ -651,19 +490,60 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
             </div>
 
             <form onSubmit={handleSaveProfile} className="flex-1 overflow-y-auto space-y-3 py-3 pr-1 scrollbar-none">
-              {/* Foto de Perfil */}
-              <div>
-                <label htmlFor="profile-avatar-url" className="text-[11px] text-[#A59DB5] block mb-1">URL da Foto de Perfil</label>
+              <div className="space-y-2.5">
+                <div className="flex items-center gap-3">
+                  <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-full border-2 border-[#842BAF] bg-[#171026] flex items-center justify-center">
+                    {!avatarPreviewFailed && avatarUrl.trim() ? (
+                      <img
+                        src={avatarUrl.trim()}
+                        alt="Prévia da foto de perfil"
+                        className="h-full w-full object-cover"
+                        onError={() => setAvatarPreviewFailed(true)}
+                      />
+                    ) : (
+                      <User className="h-6 w-6 text-[#8C849B]" aria-hidden="true" />
+                    )}
+                  </div>
+                  <div className="min-w-0">
+                    <label htmlFor="profile-avatar-url" className="text-[11px] text-[#A59DB5] block mb-1">Foto de perfil por URL</label>
+                    <p className="text-[10px] leading-relaxed text-[#8C849B]">Cole um endereço de imagem para visualizar antes de salvar.</p>
+                  </div>
+                </div>
                 <input
                   id="profile-avatar-url"
                   type="url"
+                  dir="ltr"
+                  autoComplete="off"
+                  spellCheck={false}
                   value={avatarUrl}
-                  onChange={(e) => setAvatarUrl(e.target.value)}
-                  placeholder="https://..."
-                  className="w-full bg-[#171026] border border-[#311C50] text-white text-xs rounded-xl p-2.5 focus:border-[#B784E6] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B784E6]"
+                  onChange={(e) => {
+                    setAvatarUrl(e.target.value);
+                    setAvatarPreviewFailed(false);
+                  }}
+                  placeholder="https://exemplo.com/foto.jpg"
+                  aria-describedby={avatarPreviewFailed ? 'profile-avatar-error' : 'profile-avatar-help'}
+                  className="w-full min-w-0 bg-[#171026] border border-[#311C50] text-white text-xs rounded-xl p-2.5 focus:border-[#B784E6] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B784E6]"
                 />
+                {avatarPreviewFailed ? (
+                  <div id="profile-avatar-error" className="flex items-center justify-between gap-2" role="status">
+                    <p className="text-[10px] text-amber-200">
+                      Não foi possível carregar essa imagem. Confira o endereço ou restaure a foto atual.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAvatarUrl(user.avatarUrl);
+                        setAvatarPreviewFailed(false);
+                      }}
+                      className="shrink-0 text-[10px] font-semibold text-[#D2A0FF] underline underline-offset-2"
+                    >
+                      Restaurar atual
+                    </button>
+                  </div>
+                ) : (
+                  <p id="profile-avatar-help" className="sr-only">Informe uma URL válida de imagem.</p>
+                )}
               </div>
-
               {/* Nome */}
               <div>
                 <label htmlFor="profile-name" className="text-[11px] text-[#A59DB5] block mb-1">Nome Completo</label>
@@ -750,7 +630,8 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 py-2.5 rounded-xl bg-[#842BAF] text-xs font-semibold text-white hover:bg-[#681791]"
+                  disabled={avatarPreviewFailed && avatarUrl.trim() !== user.avatarUrl}
+                  className="flex-1 py-2.5 rounded-xl bg-[#842BAF] text-xs font-semibold text-white hover:bg-[#681791] disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   Salvar Alterações
                 </button>
@@ -918,362 +799,6 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
       )}
 
       {/* ========================================================================= */}
-      {/* MODAL 3: Trocar Academia (Mantendo todo o histórico pessoal)              */}
-      {/* ========================================================================= */}
-      {gymAffiliationModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fadeIn">
-          <div className="w-full max-w-sm rounded-3xl bg-[#1F1433] border border-[#842BAF]/40 p-5 shadow-2xl relative max-h-[90vh] flex flex-col overflow-hidden">
-            <div className="flex items-center justify-between pb-3 border-b border-white/10 shrink-0">
-              <div className="flex items-center gap-2">
-                <Building2 className="w-4 h-4 text-[#B784E6]" />
-                <h3 className="text-sm font-heading font-bold text-white">
-                  Alterar Academia Vinculada
-                </h3>
-              </div>
-              <button
-                type="button"
-                onClick={() => setGymAffiliationModalOpen(false)}
-                className="p-1 rounded-lg text-[#8C849B] hover:text-white"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="flex-1 overflow-y-auto space-y-3 py-3 pr-1 scrollbar-none text-xs">
-              <div className="p-2.5 rounded-xl bg-[#171026] text-[11px] text-[#2BED77] border border-[#2BED77]/20 flex items-center gap-2">
-                <Shield className="w-4 h-4 shrink-0" />
-                <span>Seu histórico de treinos e métricas são preservados integralmente.</span>
-              </div>
-
-              <div className="space-y-2">
-                {availableGyms.map((gym, idx) => {
-                  const isCurrent = user.gymName === gym.name && user.gymBranch === gym.branch;
-                  return (
-                    <div
-                      key={idx}
-                      onClick={() => !isCurrent && handleSelectGym(gym)}
-                      className={`p-3 rounded-2xl border transition-all ${
-                        isCurrent
-                          ? 'bg-[#842BAF]/20 border-[#842BAF] cursor-default'
-                          : 'bg-[#171026] border-white/5 hover:border-white/20 cursor-pointer'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className="font-semibold text-white">{gym.name}</span>
-                        {isCurrent ? (
-                          <span className="text-[10px] text-[#2BED77] font-bold">Atual</span>
-                        ) : (
-                          <span className="text-[10px] text-[#B784E6] font-semibold">Selecionar</span>
-                        )}
-                      </div>
-                      <p className="text-[11px] text-[#A59DB5] mt-0.5">{gym.branch}</p>
-                      <p className="text-[10px] text-[#8C849B] mt-1">Instrutor: {gym.instructor} ({gym.cref})</p>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            <div className="pt-2 border-t border-white/10 shrink-0">
-              <button
-                type="button"
-                onClick={() => setGymAffiliationModalOpen(false)}
-                className="w-full py-2.5 rounded-xl bg-[#171026] text-xs font-semibold text-[#A59DB5] hover:text-white"
-              >
-                Fechar
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ========================================================================= */}
-      {/* MODAL 4: Confirmação de Encerramento de Vínculo                           */}
-      {/* ========================================================================= */}
-      {leaveGymConfirmOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-fadeIn">
-          <div className="w-full max-w-sm rounded-3xl bg-[#1F1433] border border-orange-500/30 p-5 shadow-2xl relative space-y-3">
-            <div className="flex items-center gap-2 text-orange-400">
-              <AlertTriangle className="w-5 h-5 shrink-0" />
-              <h3 className="text-sm font-heading font-bold text-white">
-                Encerrar vínculo com a academia?
-              </h3>
-            </div>
-
-            <p className="text-xs text-[#A59DB5] leading-relaxed">
-              Você passará a utilizar o LÉO IA em modo <strong className="text-white">Treino Autônomo</strong>.
-            </p>
-
-            <div className="p-3 rounded-2xl bg-[#171026] border border-white/5 text-[11px] text-[#EADDFC] space-y-1">
-              <p className="flex items-center gap-1.5 text-[#2BED77]">
-                <Check className="w-3.5 h-3.5 shrink-0" />
-                <span>Seu histórico de treinos e cargas é 100% mantido.</span>
-              </p>
-              <p className="flex items-center gap-1.5 text-[#2BED77]">
-                <Check className="w-3.5 h-3.5 shrink-0" />
-                <span>Suas metas e limitações cadastradas continuam ativas.</span>
-              </p>
-              <p className="flex items-center gap-1.5 text-[#A59DB5]">
-                <Info className="w-3.5 h-3.5 shrink-0 text-[#B784E6]" />
-                <span>O compartilhamento com {user.instructorName} será revogado.</span>
-              </p>
-            </div>
-
-            <div className="flex gap-2 pt-1">
-              <button
-                type="button"
-                onClick={() => setLeaveGymConfirmOpen(false)}
-                className="flex-1 py-2.5 rounded-xl bg-[#171026] text-xs font-semibold text-[#A59DB5] hover:text-white"
-              >
-                Voltar
-              </button>
-              <button
-                type="button"
-                onClick={handleConfirmLeaveGym}
-                className="flex-1 py-2.5 rounded-xl bg-orange-600 hover:bg-orange-700 text-xs font-semibold text-white shadow-md"
-              >
-                Confirmar Encerramento
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ========================================================================= */}
-      {/* MODAL 5: Permissões de Compartilhamento com Instrutor                     */}
-      {/* ========================================================================= */}
-      {sharingModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fadeIn">
-          <div className="w-full max-w-sm rounded-3xl bg-[#1F1433] border border-[#842BAF]/40 p-5 shadow-2xl relative max-h-[90vh] flex flex-col overflow-hidden">
-            <div className="flex items-center justify-between pb-3 border-b border-white/10 shrink-0">
-              <div className="flex items-center gap-2">
-                <Lock className="w-4 h-4 text-[#B784E6]" />
-                <h3 className="text-sm font-heading font-bold text-white">
-                  Compartilhamento com Instrutor
-                </h3>
-              </div>
-              <button
-                type="button"
-                onClick={() => setSharingModalOpen(false)}
-                className="p-1 rounded-lg text-[#8C849B] hover:text-white"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="flex-1 overflow-y-auto space-y-3.5 py-3 pr-1 scrollbar-none text-xs">
-              <p className="text-xs text-[#A59DB5]">
-                Escolha individualmente quais categorias de dados são acessíveis pelo seu instrutor credenciado ({user.instructorName}):
-              </p>
-
-              {/* Categorias */}
-              <div className="space-y-2">
-                {[
-                  {
-                    key: 'recentWorkouts' as const,
-                    title: 'Resumo dos treinos recentes',
-                    desc: 'Frequência, duração e datas dos treinos realizados.'
-                  },
-                  {
-                    key: 'exercisesAndWeights' as const,
-                    title: 'Exercícios, séries e cargas',
-                    desc: 'Cargas registradas em kg e repetições de cada série.'
-                  },
-                  {
-                    key: 'evolutionMetrics' as const,
-                    title: 'Evolução e indicadores de desempenho',
-                    desc: 'Gráficos de consistência, ritmo semanal e volume.'
-                  },
-                  {
-                    key: 'limitationsAndNotes' as const,
-                    title: 'Limitações e observações de treino',
-                    desc: 'Dores relatadas e histórico de adaptações articulares.'
-                  }
-                ].map((item) => {
-                  const active = sharingSettings[item.key];
-                  return (
-                    <div
-                      key={item.key}
-                      onClick={() => handleToggleSharingCategory(item.key)}
-                      className="p-3 rounded-2xl bg-[#171026] border border-white/5 flex items-center justify-between gap-3 cursor-pointer hover:border-white/20 transition-all"
-                    >
-                      <div className="min-w-0">
-                        <span className="font-semibold text-white block text-xs">{item.title}</span>
-                        <span className="text-[11px] text-[#8C849B] leading-snug block mt-0.5">{item.desc}</span>
-                      </div>
-                      <div
-                        className={`w-9 h-5 rounded-full transition-colors relative shrink-0 ${
-                          active ? 'bg-[#842BAF]' : 'bg-white/10'
-                        }`}
-                      >
-                        <span
-                          className={`w-4 h-4 rounded-full bg-white absolute top-0.5 transition-transform ${
-                            active ? 'right-0.5' : 'left-0.5'
-                          }`}
-                        />
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-
-              {/* Duração */}
-              <div className="p-3 rounded-2xl bg-[#171026] border border-white/5 space-y-2">
-                <span className="text-xs font-semibold text-white block">Duração do Acesso</span>
-                <div className="grid grid-cols-3 gap-1.5">
-                  {[
-                    { id: 'continuous' as const, label: 'Contínuo' },
-                    { id: '30days' as const, label: '30 dias' },
-                    { id: '90days' as const, label: '90 dias' }
-                  ].map((dur) => (
-                    <button
-                      key={dur.id}
-                      type="button"
-                      onClick={() => handleSetSharingDuration(dur.id)}
-                      className={`py-1.5 rounded-xl text-[11px] font-semibold border ${
-                        sharingSettings.duration === dur.id
-                          ? 'bg-[#842BAF] text-white border-[#B784E6]'
-                          : 'bg-[#1F1433] text-[#A59DB5] border-white/5'
-                      }`}
-                    >
-                      {dur.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Revogar */}
-              <button
-                type="button"
-                onClick={handleRevokeAllSharing}
-                className="w-full py-2.5 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-300 text-xs font-semibold border border-red-500/20 transition-colors"
-              >
-                Revogar todo o acesso compartilhado
-              </button>
-            </div>
-
-            <div className="pt-2 border-t border-white/10 shrink-0">
-              <button
-                type="button"
-                onClick={() => setSharingModalOpen(false)}
-                className="w-full py-2.5 rounded-xl bg-[#842BAF] text-xs font-semibold text-white hover:bg-[#681791]"
-              >
-                Salvar Permissões
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ========================================================================= */}
-      {/* MODAL 6: Notificações Push por Categoria                                  */}
-      {/* ========================================================================= */}
-      {notificationsModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fadeIn">
-          <div className="w-full max-w-sm rounded-3xl bg-[#1F1433] border border-[#842BAF]/40 p-5 shadow-2xl relative max-h-[90vh] flex flex-col overflow-hidden">
-            <div className="flex items-center justify-between pb-3 border-b border-white/10 shrink-0">
-              <div className="flex items-center gap-2">
-                <Bell className="w-4 h-4 text-[#B784E6]" />
-                <h3 className="text-sm font-heading font-bold text-white">
-                  Configurações de Notificações
-                </h3>
-              </div>
-              <button
-                type="button"
-                onClick={() => setNotificationsModalOpen(false)}
-                className="p-1 rounded-lg text-[#8C849B] hover:text-white"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="flex-1 overflow-y-auto space-y-3 py-3 pr-1 scrollbar-none text-xs">
-              {/* Toggle Geral */}
-              <div className="p-3 rounded-2xl bg-[#171026] border border-[#842BAF]/30 flex items-center justify-between">
-                <div>
-                  <span className="font-semibold text-white block">Notificações Gerais</span>
-                  <span className="text-[10px] text-[#A59DB5]">Controle master de alertas no celular</span>
-                </div>
-                <button
-                  type="button"
-                  onClick={handleToggleGeneralPush}
-                  className={`text-[10px] px-2.5 py-1 rounded-full font-bold border ${
-                    user.accountSettings.pushNotifications
-                      ? 'bg-[#2BED77]/20 text-[#2BED77] border-[#2BED77]/30'
-                      : 'bg-white/5 text-[#A59DB5] border-white/10'
-                  }`}
-                >
-                  {user.accountSettings.pushNotifications ? 'Ativadas' : 'Desativadas'}
-                </button>
-              </div>
-
-              {/* Categorias individuais */}
-              <div className="space-y-2 pt-1">
-                <span className="text-xs font-semibold text-white block">Categorias de Alerta</span>
-                {[
-                  {
-                    key: 'workoutReminders' as const,
-                    title: 'Lembretes de Treino',
-                    desc: 'Avisos nos dias agendados da sua rotina semanal.'
-                  },
-                  {
-                    key: 'restReminders' as const,
-                    title: 'Lembretes de Descanso',
-                    desc: 'Alertas para respeitar os intervalos entre séries e recuperação.'
-                  },
-                  {
-                    key: 'leoMessages' as const,
-                    title: 'Mensagens do LÉO IA',
-                    desc: 'Insights de consistência e sugestões posturais personalizadas.'
-                  },
-                  {
-                    key: 'instructorNotices' as const,
-                    title: 'Avisos do Instrutor',
-                    desc: 'Respostas a recados e orientações da academia.'
-                  }
-                ].map((cat) => {
-                  const active = notificationCategories[cat.key];
-                  return (
-                    <div
-                      key={cat.key}
-                      onClick={() => handleToggleNotificationCategory(cat.key)}
-                      className="p-3 rounded-2xl bg-[#171026] border border-white/5 flex items-center justify-between gap-3 cursor-pointer hover:border-white/20 transition-all"
-                    >
-                      <div className="min-w-0">
-                        <span className="font-semibold text-white block text-xs">{cat.title}</span>
-                        <span className="text-[11px] text-[#8C849B] block mt-0.5">{cat.desc}</span>
-                      </div>
-                      <div
-                        className={`w-9 h-5 rounded-full transition-colors relative shrink-0 ${
-                          active && user.accountSettings.pushNotifications ? 'bg-[#842BAF]' : 'bg-white/10'
-                        }`}
-                      >
-                        <span
-                          className={`w-4 h-4 rounded-full bg-white absolute top-0.5 transition-transform ${
-                            active && user.accountSettings.pushNotifications ? 'right-0.5' : 'left-0.5'
-                          }`}
-                        />
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            <div className="pt-2 border-t border-white/10 shrink-0">
-              <button
-                type="button"
-                onClick={() => setNotificationsModalOpen(false)}
-                className="w-full py-2.5 rounded-xl bg-[#842BAF] text-xs font-semibold text-white hover:bg-[#681791]"
-              >
-                Concluir
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ========================================================================= */}
       {/* MODAL 7: Ajuda e Suporte (FAQ + Relatar Problema + Contato)               */}
       {/* ========================================================================= */}
       {helpSupportModalOpen && (
@@ -1313,7 +838,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
                     },
                     {
                       q: 'Como funciona o acompanhamento com o instrutor?',
-                      a: 'Você escolhe quais dados compartilhar pelo menu de permissões. Pode enviar mensagens com anexos de treino e receber orientações diretamente na plataforma.'
+                      a: 'O acompanhamento com instrutores ainda não está integrado. Nenhum dado ou mensagem é enviado por esta tela; os registros existentes no perfil não confirmam comunicação.'
                     },
                     {
                       q: 'Como consultar meu histórico?',
@@ -1321,7 +846,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
                     },
                     {
                       q: 'Como alterar minha academia?',
-                      a: 'No card "Vínculo com Academia", clique em "Trocar" ou "Encerrar vínculo". Sua conta é de sua propriedade e 100% do seu histórico permanece com você.'
+                      a: 'O vínculo com academia e instrutor ainda não está integrado. Os dados informados no perfil são apenas informativos.'
                     }
                   ].map((faq, idx) => {
                     const isOpen = expandedFaqIndex === idx;

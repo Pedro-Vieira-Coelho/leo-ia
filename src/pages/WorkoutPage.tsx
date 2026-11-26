@@ -43,6 +43,7 @@ export const WorkoutPage: React.FC<WorkoutPageProps> = ({
   const [timerModalOpen, setTimerModalOpen] = useState(false);
   const [videoModalEx, setVideoModalEx] = useState<Exercise | null>(null);
   const [celebrationOpen, setCelebrationOpen] = useState(false);
+  const [completionError, setCompletionError] = useState('');
 
   const { modalRef: videoModalRef } = useAccessibleModal({
     isOpen: !!videoModalEx,
@@ -119,6 +120,7 @@ export const WorkoutPage: React.FC<WorkoutPageProps> = ({
     const wasCompleted = targetSet ? targetSet.completed : false;
 
     workoutService.toggleSetCompletion(exercise.id, setNumber);
+    setCompletionError('');
 
     // If user marked a set as finished, automatically trigger rest interval!
     if (!wasCompleted) {
@@ -130,6 +132,7 @@ export const WorkoutPage: React.FC<WorkoutPageProps> = ({
 
   const handleToggleExercise = (exerciseId: string) => {
     workoutService.toggleExerciseCompletion(exerciseId);
+    setCompletionError('');
   };
 
   const handleAdjustWeight = (exerciseId: string, setNumber: number, delta: number, currentWeight: number) => {
@@ -152,6 +155,13 @@ export const WorkoutPage: React.FC<WorkoutPageProps> = ({
 
   const handleFinishWorkout = () => {
     const result = workoutService.completeFullWorkout();
+    if (!result.completed) {
+      const activityLabel = result.incompleteExercises === 1 ? 'exercício ainda tem' : 'exercícios ainda têm';
+      setCompletionError(`Não foi possível concluir: ${result.incompleteExercises} ${activityLabel} séries pendentes. Marque somente as séries que você realizou.`);
+      return;
+    }
+
+    setCompletionError('');
     historyService.addWorkoutLog({
       workoutCode: activeWorkout.code,
       title: activeWorkout.title,
@@ -567,6 +577,21 @@ export const WorkoutPage: React.FC<WorkoutPageProps> = ({
       </section>
 
       {/* 6. Botão Finalizar Sessão de Treino */}
+      {activeWorkout.isTemplate && (
+        <p className="rounded-xl border border-[#B784E6]/20 bg-[#B784E6]/10 px-3 py-2 text-[11px] leading-relaxed text-[#D2A0FF]" role="note">
+          Esta é uma ficha inicial de exemplo e pode não refletir seu perfil ou suas necessidades.
+        </p>
+      )}
+
+      {completionError && (
+        <div className="rounded-xl border border-amber-400/30 bg-amber-400/10 px-3 py-2.5 text-xs leading-relaxed text-amber-100" role="alert">
+          <div className="flex items-start gap-2">
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+            <p>{completionError}</p>
+          </div>
+        </div>
+      )}
+
       <div className="pt-2">
         <button
           type="button"

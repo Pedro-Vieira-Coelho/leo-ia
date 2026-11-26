@@ -37,16 +37,18 @@ export const HistoryPage: React.FC<HistoryPageProps> = ({
   const [selectedFilter, setSelectedFilter] = useState<'Semana' | 'Este mês' | 'Últimos 3 meses'>('Este mês');
   const stats = historyService.getStats(selectedFilter);
   const pastWorkouts = historyService.getPastWorkouts(selectedFilter);
+  const initialDate = new Date();
+  const initialDateKey = `${initialDate.getFullYear()}-${String(initialDate.getMonth() + 1).padStart(2, '0')}-${String(initialDate.getDate()).padStart(2, '0')}`;
 
   // Navegação do Calendário
-  const [calendarYear, setCalendarYear] = useState(2026);
-  const [calendarMonth, setCalendarMonth] = useState(10); // Outubro
+  const [calendarYear, setCalendarYear] = useState(() => initialDate.getFullYear());
+  const [calendarMonth, setCalendarMonth] = useState(() => initialDate.getMonth() + 1);
   const calendarDays = historyService.getMonthCalendarDays(calendarYear, calendarMonth);
 
   // Dia Selecionado no Calendário
-  const [selectedDateKey, setSelectedDateKey] = useState<string>('2026-10-27');
+  const [selectedDateKey, setSelectedDateKey] = useState<string>(initialDateKey);
   const [selectedDayStatus, setSelectedDayStatus] = useState<CalendarDayStatus | null>(
-    calendarDays.find(d => d.dateKey === '2026-10-27') || null
+    calendarDays.find(d => d.dateKey === initialDateKey) || null
   );
 
   // Lista de Treinos e Modal de Detalhes

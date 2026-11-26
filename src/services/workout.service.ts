@@ -209,18 +209,22 @@ class WorkoutService {
     });
   }
 
-  public completeFullWorkout(): { title: string; minutes: number } {
+  public completeFullWorkout():
+    | { completed: true; title: string; minutes: number }
+    | { completed: false; incompleteExercises: number } {
     const workout = this.getActiveWorkout();
+    const incompleteExercises = workout.exercises.filter(
+      (exercise) => exercise.sets.length === 0 || !exercise.sets.every((set) => set.completed),
+    ).length;
+
+    if (workout.exercises.length === 0 || incompleteExercises > 0) {
+      return { completed: false, incompleteExercises };
+    }
+
     this.updateActiveWorkout((active) => {
-      active.exercises.forEach((exercise) => {
-        exercise.completed = true;
-        exercise.sets.forEach((set) => {
-          set.completed = true;
-        });
-      });
       active.lastCompletedDate = new Date().toISOString();
     });
-    return { title: workout.title, minutes: workout.estimatedDurationMin };
+    return { completed: true, title: workout.title, minutes: workout.estimatedDurationMin };
   }
 
   private updateActiveWorkout(update: (workout: WorkoutSession) => void): void {

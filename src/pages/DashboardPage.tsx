@@ -27,6 +27,11 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
   const activeWorkout = workoutService.getActiveWorkout();
   const progress = workoutService.calculateProgress(activeWorkout);
   const stats = historyService.getStats();
+  const today = new Date();
+  const todayDateKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+  const weekday = new Intl.DateTimeFormat('pt-BR', { weekday: 'long' })
+    .format(today)
+    .toLocaleUpperCase('pt-BR');
 
   const firstName = user.name ? user.name.split(' ')[0] : 'Carlos';
   const instructorDisplayName = user.instructorName
@@ -39,7 +44,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
       <div className="flex items-center justify-between pt-1">
         <div>
           <span className="text-[11px] font-semibold text-[#B784E6] uppercase tracking-wider flex items-center gap-1.5">
-            <span className="text-[10px] text-[#B784E6]">✦</span> <time dateTime="2026-10-27">TERÇA-FEIRA</time>
+            <span className="text-[10px] text-[#B784E6]">✦</span> <time dateTime={todayDateKey}>{weekday}</time>
           </span>
           <h1 className="text-2xl sm:text-[26px] font-heading font-extrabold text-white tracking-tight mt-0.5">
             Olá, {firstName}
@@ -73,6 +78,11 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
                 <span className="text-xs font-bold px-2.5 py-0.5 rounded-lg bg-[#2D124D] text-[#D2A0FF] border border-[#842BAF]/40">
                   {activeWorkout.code}
                 </span>
+                {activeWorkout.isTemplate && (
+                  <span className="rounded-lg border border-[#B784E6]/30 bg-[#B784E6]/10 px-2 py-0.5 text-[10px] font-semibold text-[#D2A0FF]">
+                    Modelo de exemplo
+                  </span>
+                )}
                 <span className="text-xs text-[#A59DB5] flex items-center gap-1 font-medium">
                   <Clock className="w-3.5 h-3.5 text-[#A59DB5]" />
                   ~{activeWorkout.estimatedDurationMin} min
