@@ -188,7 +188,7 @@ async function callGemini(geminiApiKey: string, fullSystemInstruction: string, u
 
   try {
     return await fetch(
-      'https://generativelanguage.googleapis.com/v1beta/models/gemini-4-hydrogen:generateContent',
+      'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent',
       {
         method: 'POST',
         signal: controller.signal,
