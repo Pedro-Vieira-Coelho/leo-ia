@@ -182,37 +182,60 @@ function jsonResponse(status: number, body: Record<string, unknown>) {
   });
 }
 
-async function callGemini(geminiApiKey: string, fullSystemInstruction: string, userMessage: string) {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 20000);
+const GEMINI_MODELS = [
+  'gemini-3.8-flash',
+  'gemini-3.7-flash',
+  'gemini-3.5-flash-lite',
+];
 
-  try {
-    return await fetch(
-      'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent',
-      {
-        method: 'POST',
-        signal: controller.signal,
-        headers: {
-          'Content-Type': 'application/json',
-          'x-goog-api-key': geminiApiKey,
+async function callGemini(geminiApiKey: string, fullSystemInstruction: string, userMessage: string) {
+  let lastResponse: Response | null = null;
+
+  for (const model of GEMINI_MODELS) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 12000);
+
+    try {
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
+        {
+          method: 'POST',
+          signal: controller.signal,
+          headers: {
+            'Content-Type': 'application/json',
+            'x-goog-api-key': geminiApiKey,
+          },
+          body: JSON.stringify({
+            systemInstruction: {
+              parts: [{ text: fullSystemInstruction }],
+            },
+            contents: [{ parts: [{ text: userMessage }] }],
+            generationConfig: {
+              maxOutputTokens: 450,
+              temperature: 0.4,
+            },
+          }),
         },
-        body: JSON.stringify({
-          systemInstruction: {
-            parts: [{
-              text: fullSystemInstruction,
-            }],
-          },
-          contents: [{ parts: [{ text: userMessage }] }],
-          generationConfig: {
-            maxOutputTokens: 450,
-            temperature: 0.4,
-          },
-        }),
-      },
-    );
-  } finally {
-    clearTimeout(timeoutId);
+      );
+
+      if (response.ok) return response;
+
+      lastResponse = response;
+      console.warn(`Modelo ${model} retornou ${response.status}. Tentando fallback...`);
+
+      // Tenta o próximo modelo em caso de indisponibilidade, cota ou modelo bloqueado
+      if (response.status !== 503 && response.status !== 429 && response.status !== 404) {
+        return response;
+      }
+    } catch (err) {
+      console.warn(`Timeout/erro de rede no modelo ${model}:`, err);
+    } finally {
+      clearTimeout(timeoutId);
+    }
   }
+
+  if (lastResponse) return lastResponse;
+  throw new Error('Todos os modelos Gemini falharam ou excederam o tempo limite.');
 }
 
 Deno.serve(async (request: Request) => {
