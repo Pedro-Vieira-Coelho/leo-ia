@@ -22,23 +22,43 @@ interface RegisterPageProps {
   onBackToLogin: () => void;
 }
 
+function getRegistrationErrorMessage(error: unknown): string {
+  const message = error instanceof Error ? error.message : '';
+  const normalizedMessage = message.toLowerCase();
+
+  if (normalizedMessage.includes('email address not authorized')) {
+    return 'O SMTP padrão do Supabase não pode enviar para este endereço. Para testar, desligue temporariamente a confirmação de e-mail ou configure um SMTP próprio.';
+  }
+  if (normalizedMessage.includes('email rate limit exceeded') || normalizedMessage.includes('rate limit')) {
+    return 'O Supabase limitou o envio de e-mails. Aguarde antes de tentar novamente ou configure um SMTP próprio.';
+  }
+  if (normalizedMessage.includes('user already registered')) {
+    return 'Este e-mail já tem uma conta. Tente entrar ou confira a conta em Authentication > Users.';
+  }
+  if (normalizedMessage.includes('password')) {
+    return `O Supabase rejeitou a senha: ${message}`;
+  }
+
+  return message ? `Falha no cadastro: ${message}` : 'Não foi possível criar a conta. Tente novamente.';
+}
+
 export const RegisterPage: React.FC<RegisterPageProps> = ({
   onNextStep,
   onBackToLogin
 }) => {
   // Dados de Acesso
-  const [email, setEmail] = useState('carlos.mendes@email.com');
-  const [password, setPassword] = useState('123456');
-  const [confirmPassword, setConfirmPassword] = useState('123456');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [phone, setPhone] = useState('(11) 98452-1920');
+  const [phone, setPhone] = useState('');
 
   // Dados Pessoais & Físicos
-  const [name, setName] = useState('Carlos Eduardo Mendes');
-  const [age, setAge] = useState(48);
-  const [weight, setWeight] = useState(81.5);
-  const [height, setHeight] = useState(178);
+  const [name, setName] = useState('');
+  const [age, setAge] = useState('');
+  const [weight, setWeight] = useState('');
+  const [height, setHeight] = useState('');
 
   // Nível e Rotina
   const [experienceLevel, setExperienceLevel] = useState<'Iniciante' | 'Intermediário' | 'Avançado'>('Intermediário');
@@ -46,6 +66,8 @@ export const RegisterPage: React.FC<RegisterPageProps> = ({
 
   // Erros e Validação
   const [error, setError] = useState('');
+  const [successMessage, setSuccessMessage] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [socialLoading, setSocialLoading] = useState<'google' | 'apple' | null>(null);
 
   const allDays = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
@@ -60,9 +82,10 @@ export const RegisterPage: React.FC<RegisterPageProps> = ({
     }
   };
 
-  const handleContinue = (e: React.FormEvent) => {
+  const handleContinue = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setSuccessMessage('');
 
     if (!name.trim()) {
       setError('Por favor, informe seu nome completo.');
@@ -80,43 +103,54 @@ export const RegisterPage: React.FC<RegisterPageProps> = ({
       setError('As senhas digitadas não coincidem.');
       return;
     }
+    if (!Number.isFinite(Number(age)) || Number(age) < 14 || Number(age) > 99) {
+      setError('Informe uma idade entre 14 e 99 anos.');
+      return;
+    }
+    if (!Number.isFinite(Number(weight)) || Number(weight) <= 0 ||
+      !Number.isFinite(Number(height)) || Number(height) <= 0) {
+      setError('Informe peso e altura válidos.');
+      return;
+    }
 
-    // Salva os dados no authService e avança para Passo 2 (Preferências)
-    authService.register({
-      name: name.trim(),
-      email: email.trim(),
-      phone: phone.trim(),
-      age: Number(age) || 30,
-      weightKg: Number(weight) || 75,
-      heightCm: Number(height) || 175,
-      experienceLevel,
-      weeklyFrequency: trainingDays.length || 4,
-      trainingDays,
-      provider: 'email'
-    });
+    setIsSubmitting(true);
+    try {
+      const result = await authService.register({
+        name: name.trim(),
+        email: email.trim(),
+        password,
+        phone: phone.trim(),
+        age: Number(age),
+        weightKg: Number(weight),
+        heightCm: Number(height),
+        experienceLevel,
+        weeklyFrequency: trainingDays.length,
+        trainingDays,
+        provider: 'email'
+      });
 
-    onNextStep();
+      if (result.requiresEmailConfirmation) {
+        setSuccessMessage('Conta criada. Confirme seu e-mail pelo link enviado antes de entrar.');
+        return;
+      }
+
+      onNextStep();
+    } catch (error) {
+      setError(getRegistrationErrorMessage(error));
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  const handleSocialRegister = (provider: 'google' | 'apple') => {
+  const handleSocialRegister = async (provider: 'google' | 'apple') => {
     setSocialLoading(provider);
-    setTimeout(() => {
+    setError('');
+    try {
+      await authService.loginWithProvider(provider);
+    } catch {
       setSocialLoading(null);
-      // Prepara o cadastro social e segue para Passo 2
-      authService.register({
-        name: name.trim() || 'Aluno LÉO IA',
-        email: email.trim() || `aluno.${provider}@leoia.fitness`,
-        phone: phone.trim(),
-        age: Number(age) || 30,
-        weightKg: Number(weight) || 75,
-        heightCm: Number(height) || 175,
-        experienceLevel,
-        weeklyFrequency: trainingDays.length || 4,
-        trainingDays,
-        provider
-      });
-      onNextStep();
-    }, 600);
+      setError(`Não foi possível conectar com ${provider === 'google' ? 'Google' : 'Apple'}. Verifique se o provedor está habilitado no Supabase.`);
+    }
   };
 
   return (
@@ -181,6 +215,11 @@ export const RegisterPage: React.FC<RegisterPageProps> = ({
           <div role="alert" id="register-error-msg" className="p-3 mb-4 rounded-xl bg-red-500/20 border border-red-500/40 text-xs text-red-200 flex items-center gap-2 animate-fadeIn">
             <AlertCircle className="w-4 h-4 shrink-0 text-red-400" />
             <span>{error}</span>
+          </div>
+        )}
+        {successMessage && (
+          <div role="status" className="p-3 mb-4 rounded-xl bg-green-500/15 border border-green-500/30 text-xs text-green-200">
+            {successMessage}
           </div>
         )}
 
@@ -355,7 +394,7 @@ export const RegisterPage: React.FC<RegisterPageProps> = ({
                     min={14}
                     max={99}
                     value={age}
-                    onChange={(e) => setAge(Number(e.target.value))}
+                    onChange={(e) => setAge(e.target.value)}
                     className="w-full bg-[#1F1433] border border-[#311C50] text-white text-xs rounded-xl p-2 text-center focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B784E6] font-mono"
                   />
                 </div>
@@ -367,7 +406,7 @@ export const RegisterPage: React.FC<RegisterPageProps> = ({
                     step="0.5"
                     required
                     value={weight}
-                    onChange={(e) => setWeight(Number(e.target.value))}
+                    onChange={(e) => setWeight(e.target.value)}
                     className="w-full bg-[#1F1433] border border-[#311C50] text-white text-xs rounded-xl p-2 text-center focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B784E6] font-mono"
                   />
                 </div>
@@ -378,7 +417,7 @@ export const RegisterPage: React.FC<RegisterPageProps> = ({
                     type="number"
                     required
                     value={height}
-                    onChange={(e) => setHeight(Number(e.target.value))}
+                    onChange={(e) => setHeight(e.target.value)}
                     className="w-full bg-[#1F1433] border border-[#311C50] text-white text-xs rounded-xl p-2 text-center focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B784E6] font-mono"
                   />
                 </div>
@@ -484,9 +523,10 @@ export const RegisterPage: React.FC<RegisterPageProps> = ({
               <div className="pt-2">
                 <button
                   type="submit"
-                  className="w-full py-3 px-6 rounded-xl bg-gradient-to-r from-[#842BAF] to-[#681791] text-white font-semibold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(132,43,175,0.4)] hover:shadow-[0_0_28px_rgba(183,132,230,0.6)] active:scale-95 transition-all"
+                  disabled={isSubmitting || socialLoading !== null}
+                  className="w-full py-3 px-6 rounded-xl bg-gradient-to-r from-[#842BAF] to-[#681791] text-white font-semibold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(132,43,175,0.4)] hover:shadow-[0_0_28px_rgba(183,132,230,0.6)] active:scale-95 transition-all disabled:opacity-60"
                 >
-                  <span>Avançar para Objetivos & Preferências</span>
+                  <span>{isSubmitting ? 'Criando conta...' : 'Avançar para Objetivos & Preferências'}</span>
                   <ArrowRight className="w-4 h-4" />
                 </button>
               </div>

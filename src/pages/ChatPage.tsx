@@ -133,6 +133,7 @@ export const ChatPage: React.FC<ChatPageProps> = ({
   // Mensagens e Digitação
   const [inputText, setInputText] = useState('');
   const [isTyping, setIsTyping] = useState(false);
+  const [chatError, setChatError] = useState('');
   const [showScrollBottomBtn, setShowScrollBottomBtn] = useState(false);
 
   // Modais de Apoio
@@ -153,7 +154,6 @@ export const ChatPage: React.FC<ChatPageProps> = ({
     const unsub = chatService.subscribe(() => {
       setConversations([...chatService.getConversations()]);
       setActiveConversation({ ...chatService.getActiveConversation() });
-      setIsTyping(false);
     });
     return () => unsub();
   }, []);
@@ -202,17 +202,24 @@ export const ChatPage: React.FC<ChatPageProps> = ({
   }, [activeConversation.messages, scrollToBottom]);
 
   // Enviar Mensagem
-  const handleSend = (textToSend?: string) => {
+  const handleSend = async (textToSend?: string) => {
     const text = textToSend || inputText;
-    if (!text.trim()) return;
+    if (!text.trim() || isTyping) return;
 
     setInputText('');
+    setChatError('');
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
     }
 
     setIsTyping(true);
-    chatService.sendMessage(text);
+    try {
+      await chatService.sendMessage(text);
+    } catch (error) {
+      setChatError(error instanceof Error ? error.message : 'Não foi possível enviar a mensagem.');
+    } finally {
+      setIsTyping(false);
+    }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -468,11 +475,12 @@ export const ChatPage: React.FC<ChatPageProps> = ({
               onKeyDown={handleKeyDown}
               placeholder="Converse com o LÉO sobre postura, carga ou adaptação..."
               className="flex-1 bg-transparent text-white text-xs px-3 py-2 focus:outline-none placeholder-[#8C849B] resize-none max-h-24 leading-relaxed"
+              disabled={isTyping}
             />
 
             <button
               type="submit"
-              disabled={!inputText.trim()}
+              disabled={!inputText.trim() || isTyping}
               className="p-2.5 rounded-xl bg-gradient-to-r from-[#842BAF] to-[#681791] hover:from-[#9532c6] hover:to-[#761ea5] text-white disabled:opacity-40 disabled:pointer-events-none active:scale-95 transition-all shadow-md min-w-[38px] min-h-[38px] flex items-center justify-center shrink-0 mb-0.5"
               title="Enviar mensagem"
               aria-label="Enviar mensagem"
@@ -480,6 +488,10 @@ export const ChatPage: React.FC<ChatPageProps> = ({
               <Send className="w-4 h-4" />
             </button>
           </form>
+          {chatError && <p role="alert" className="px-2 pt-2 text-[11px] text-red-300">{chatError}</p>}
+          <p className="px-2 pt-1 text-[10px] text-[#8C849B]">
+            Mensagens enviadas ao Google Gemini para gerar respostas. Não substitui orientação profissional.
+          </p>
         </div>
       </div>
     </div>
