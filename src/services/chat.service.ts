@@ -11,9 +11,16 @@ class ChatService {
   private activeConversationId: string = 'conv_1';
   private listeners: Array<() => void> = [];
   private userScope = 'guest';
-
+  
   constructor() {
     this.initConversations();
+  }
+
+  private generateId(): string {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+      return crypto.randomUUID();
+    }
+    return `${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
   }
 
   private initConversations() {
@@ -233,7 +240,7 @@ class ChatService {
   }
 
   public createConversation(title?: string): ChatConversation {
-    const newId = `conv_${crypto.randomUUID()}`;
+    const newId = `conv_${this.generateId()}`;
     const now = new Date().toISOString();
     const newConv: ChatConversation = {
       id: newId,
@@ -244,7 +251,7 @@ class ChatService {
       contextWorkout: 'Treino A · Peito, Tríceps & Ombro',
       messages: [
         {
-          id: `msg_welcome_${crypto.randomUUID()}`,
+          id: `msg_welcome_${this.generateId()}`,
           sender: 'leo',
           text: 'Olá! Como posso ajudar no seu treino hoje? Posso conversar sobre postura, adaptação de exercícios ou organização da rotina.',
           timestamp: this.getCurrentTime(),
@@ -320,7 +327,7 @@ class ChatService {
     const nowTime = this.getCurrentTime();
 
     const userMsg: ChatMessage = {
-      id: `usr_${crypto.randomUUID()}`,
+      id: `usr_${this.generateId()}`,
       sender: 'user',
       text,
       timestamp: nowTime
@@ -345,7 +352,7 @@ class ChatService {
     if (!data?.text) throw new Error('A IA não retornou uma resposta válida. Tente novamente.');
 
     currentConv.messages.push({
-      id: `leo_${crypto.randomUUID()}`,
+      id: `leo_${this.generateId()}`,
       sender: 'leo',
       text: data.text,
       timestamp: this.getCurrentTime(),
