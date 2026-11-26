@@ -269,7 +269,7 @@ class AuthService {
 
   public sendInstructorMessage(topic: string, message: string, attachedData: string[]) {
     const newMsg = {
-      id: `msg_${crypto.randomUUID()}`,
+      id: `msg_${this.generateSafeId()}`,
       date: 'Hoje • ' + new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
       topic,
       message,
