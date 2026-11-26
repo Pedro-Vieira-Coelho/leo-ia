@@ -7,11 +7,212 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
 
+const LEO_SYSTEM_PROMPT = `
+# IDENTIDADE E PAPEL
+Você é o LÉO, um assistente virtual de treino com postura de instrutor de academia didático, acolhedor e objetivo.
+- Seu papel é ajudar o aluno a organizar treinos, entender a execução de exercícios, adaptar movimentos e lidar com situações comuns da academia.
+- Você NÃO substitui um profissional de Educação Física presencial nem um médico ou fisioterapeuta.
+
+# USO DE DADOS DO ALUNO (REGRA CRÍTICA)
+- Utilize apenas os dados listados na seção "DADOS CADASTRADOS DO ALUNO" abaixo quando forem relevantes para personalizar a resposta (ex.: chamar pelo nome, adequar explicações ao nível de experiência ou objetivo, respeitar limitações ativas).
+- Nunca invente, presuma ou deduza informações que não estejam explicitamente registradas nos dados cadastrados ou na conversa atual. Se um dado não estiver disponível, informe com transparência e pergunte diretamente ao aluno.
+
+# ESTILO E CONCISÃO (REGRA RÍGIDA)
+- Responda sempre em português brasileiro.
+- Seja extremamente direto e conciso: entregue respostas de no máximo 3 a 4 linhas curtas ou 2 a 3 tópicos breves.
+- Evite introduções longas, rodeios ou repetições. Vá direto ao ponto prático.
+
+# SITUAÇÕES COMUNS DA ACADEMIA
+1. Máquina ou equipamento lotado: sugira imediatamente 1 ou 2 exercícios equivalentes que trabalhem o mesmo grupo muscular com halteres, barra ou peso corporal, sem interromper o treino.
+2. Cansaço durante o treino: ajude o aluno a diferenciar fadiga muscular normal de esforço excessivo; sugira ajustar a carga, aumentar o descanso entre séries ou encerrar a sessão caso haja exaustão extrema.
+3. Dúvidas de execução ou organização: explique os pontos-chave da postura de forma simples e visual.
+
+# TRIAGEM DE DOR, DESCONFORTO E SEGURANÇA (DIRETRIZ CRÍTICA)
+Nunca diagnostique doenças, lesões ou causas clínicas da dor, e nunca incentive o aluno a "treinar por cima da dor". Diferencie os cenários:
+
+- Desconforto leve ou localizado (ex.: punho incomodando em exercício que não exige carga direta nele, como treino de pernas):
+  1. Não insista no movimento que gera incômodo.
+  2. Faça uma triagem rápida perguntando como é esse desconforto (intensidade, se é pontada ou cansaço).
+  3. Sugira alternativas seguras que não sobrecarreguem a região afetada, sem encerrar o treino inteiro sem necessidade.
+
+- Sinais de alerta ou emergência (dor aguda/intensa, fisgada súbita, dormência, formigamento, tontura, falta de ar, dor no peito ou dor persistente que piora):
+  1. Oriente a INTERROMPER imediatamente o exercício e o treino.
+  2. Recomende buscar avaliação de um médico ou profissional de saúde presencial.
+  3. Não sugira exercícios alternativos nesse cenário.
+`.trim();
+
+function pickString(profile: Record<string, unknown>, keys: string[]): string | undefined {
+  for (const key of keys) {
+    const val = profile[key];
+    if (typeof val === 'string' && val.trim()) {
+      return val.trim();
+    }
+  }
+  return undefined;
+}
+
+function pickPositiveNumber(profile: Record<string, unknown>, keys: string[]): number | undefined {
+  for (const key of keys) {
+    const val = profile[key];
+    if (typeof val === 'number' && Number.isFinite(val) && val > 0) {
+      return val;
+    }
+    if (typeof val === 'string' && val.trim()) {
+      const parsed = Number(val.replace(',', '.'));
+      if (Number.isFinite(parsed) && parsed > 0) {
+        return parsed;
+      }
+    }
+  }
+  return undefined;
+}
+
+function pickStringList(profile: Record<string, unknown>, keys: string[]): string[] {
+  for (const key of keys) {
+    const val = profile[key];
+    if (Array.isArray(val)) {
+      const items = val
+        .map((item) => (typeof item === 'string' ? item.trim() : ''))
+        .filter(Boolean);
+      if (items.length > 0) return items;
+    } else if (typeof val === 'string' && val.trim()) {
+      const items = val
+        .split(',')
+        .map((item) => item.trim())
+        .filter(Boolean);
+      if (items.length > 0) return items;
+    }
+  }
+  return [];
+}
+
+function buildStudentContext(profile: Record<string, unknown>): string {
+  const lines: string[] = [];
+
+  const name = pickString(profile, ['name', 'full_name', 'fullName']);
+  if (name) lines.push(`- Nome: ${name}`);
+
+  const age = pickPositiveNumber(profile, ['age', 'idade']);
+  if (age) lines.push(`- Idade: ${age} anos`);
+
+  const weightKg = pickPositiveNumber(profile, ['weightKg', 'weight_kg', 'weight', 'peso']);
+  if (weightKg) lines.push(`- Peso: ${weightKg} kg`);
+
+  const heightCm = pickPositiveNumber(profile, ['heightCm', 'height_cm', 'height', 'altura']);
+  if (heightCm) lines.push(`- Altura: ${heightCm} cm`);
+
+  const primaryGoal = pickString(profile, ['primaryGoal', 'primary_goal', 'goal', 'objetivo']);
+  if (primaryGoal) lines.push(`- Objetivo principal: ${primaryGoal}`);
+
+  const biomechanicalFocus = pickString(profile, [
+    'biomechanicalFocus',
+    'biomechanical_focus',
+    'trainingFocus',
+    'training_focus',
+    'foco',
+  ]);
+  if (biomechanicalFocus) lines.push(`- Foco biomecânico: ${biomechanicalFocus}`);
+
+  const experienceLevel = pickString(profile, [
+    'experienceLevel',
+    'experience_level',
+    'level',
+    'experiencia',
+  ]);
+  if (experienceLevel) lines.push(`- Nível de experiência: ${experienceLevel}`);
+
+  const experienceDetail = pickString(profile, [
+    'experienceDetail',
+    'experience_detail',
+    'experienceNotes',
+    'experience_notes',
+  ]);
+  if (experienceDetail) lines.push(`- Detalhe da experiência: ${experienceDetail}`);
+
+  const weeklyFrequency = pickPositiveNumber(profile, [
+    'weeklyFrequency',
+    'weekly_frequency',
+    'frequency',
+    'frequencia_semanal',
+  ]);
+  if (weeklyFrequency) lines.push(`- Frequência semanal: ${weeklyFrequency}x por semana`);
+
+  const trainingDays = pickStringList(profile, [
+    'trainingDays',
+    'training_days',
+    'dias_treino',
+    'workoutDays',
+  ]);
+  if (trainingDays.length > 0) {
+    lines.push(`- Dias de treino: ${trainingDays.join(', ')}`);
+  }
+
+  const availability = pickString(profile, ['availability', 'disponibilidade', 'schedule']);
+  if (availability) lines.push(`- Disponibilidade: ${availability}`);
+
+  const activeLimitations = pickStringList(profile, [
+    'activeLimitations',
+    'active_limitations',
+    'limitations',
+    'limitacoes',
+  ]);
+  if (activeLimitations.length > 0) {
+    lines.push(`- Limitações ativas: ${activeLimitations.join(', ')}`);
+  }
+
+  const additionalNotes = pickString(profile, [
+    'additionalNotes',
+    'additional_notes',
+    'notes',
+    'observacoes',
+  ]);
+  if (additionalNotes) lines.push(`- Observações adicionais: ${additionalNotes}`);
+
+  if (lines.length === 0) {
+    return '\n\n# DADOS CADASTRADOS DO ALUNO\nNenhum dado de perfil preenchido pelo aluno até o momento.';
+  }
+
+  return `\n\n# DADOS CADASTRADOS DO ALUNO\n${lines.join('\n')}`;
+}
+
 function jsonResponse(status: number, body: Record<string, unknown>) {
   return new Response(JSON.stringify(body), {
     status,
     headers: { ...corsHeaders, 'Content-Type': 'application/json' },
   });
+}
+
+async function callGemini(geminiApiKey: string, fullSystemInstruction: string, userMessage: string) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 20000);
+
+  try {
+    return await fetch(
+      'https://generativelanguage.googleapis.com/v1beta/models/gemini-4-hydrogen:generateContent',
+      {
+        method: 'POST',
+        signal: controller.signal,
+        headers: {
+          'Content-Type': 'application/json',
+          'x-goog-api-key': geminiApiKey,
+        },
+        body: JSON.stringify({
+          systemInstruction: {
+            parts: [{
+              text: fullSystemInstruction,
+            }],
+          },
+          contents: [{ parts: [{ text: userMessage }] }],
+          generationConfig: {
+            maxOutputTokens: 450,
+            temperature: 0.4,
+          },
+        }),
+      },
+    );
+  } finally {
+    clearTimeout(timeoutId);
+  }
 }
 
 Deno.serve(async (request: Request) => {
@@ -75,31 +276,43 @@ Deno.serve(async (request: Request) => {
     return jsonResponse(429, { error: 'Limite de mensagens atingido. Tente novamente em um minuto.' });
   }
 
-  const geminiResponse = await fetch(
-    'https://generativelanguage.googleapis.com/v1beta/models/gemini-4-hydrogen:generateContent',
-    {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-goog-api-key': geminiApiKey,
-      },
-      body: JSON.stringify({
-        systemInstruction: {
-          parts: [{
-            text: 'Você é o LÉO, um assistente informativo de exercícios. Não diagnostique doenças nem substitua um médico ou profissional de educação física. Não incentive treinar com dor. Se a pessoa relatar dor, lesão ou condição de saúde, recomende interromper o exercício e buscar orientação profissional presencial. Responda em português brasileiro, com cuidado e objetividade.',
-          }],
-        },
-        contents: [{ parts: [{ text: message.trim() }] }],
-        generationConfig: {
-          maxOutputTokens: 500,
-          thinkingConfig: { thinkingLevel: 'low' },
-        },
-      }),
-    },
-  );
+  const { data: profileRow, error: profileError } = await adminClient
+    .from('profiles')
+    .select('profile')
+    .eq('id', userData.user.id)
+    .maybeSingle();
+
+  if (profileError) {
+    console.error('Falha ao buscar perfil do aluno:', profileError.message);
+  }
+
+  const rawProfile = (
+    profileRow?.profile ??
+    userData.user.user_metadata?.profile ??
+    {}
+  ) as Record<string, unknown>;
+
+  if (!rawProfile.name && typeof userData.user.user_metadata?.full_name === 'string') {
+    rawProfile.name = userData.user.user_metadata.full_name;
+  }
+
+  const fullSystemInstruction = `${LEO_SYSTEM_PROMPT}${buildStudentContext(rawProfile)}`;
+
+  let geminiResponse: Response;
+  try {
+    geminiResponse = await callGemini(geminiApiKey, fullSystemInstruction, message.trim());
+    if (geminiResponse.status === 503 || geminiResponse.status === 429) {
+      await new Promise((resolve) => setTimeout(resolve, 1200));
+      geminiResponse = await callGemini(geminiApiKey, fullSystemInstruction, message.trim());
+    }
+  } catch (err) {
+    console.error('Falha ou timeout ao chamar o Gemini:', err);
+    return jsonResponse(504, { error: 'O LÉO demorou para responder. Tente novamente.' });
+  }
 
   if (!geminiResponse.ok) {
-    console.error(`Gemini respondeu com status ${geminiResponse.status}.`);
+    const errText = await geminiResponse.text().catch(() => '');
+    console.error(`Gemini respondeu com status ${geminiResponse.status}:`, errText);
     return jsonResponse(502, { error: 'A IA está indisponível no momento. Tente novamente.' });
   }
 
